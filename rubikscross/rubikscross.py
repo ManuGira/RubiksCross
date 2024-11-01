@@ -75,6 +75,10 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
     def get_next_frame(self) -> npt.NDArray:
         pass
 
+    @abc.abstractmethod
+    def get_tile_size(self) -> int:
+        pass
+
 
 class CroixPharamGraphics(RubiksCrossGraphicsInterface):
     def __init__(self, tiles: list[npt.NDArray], animation_max_length: int):
@@ -121,9 +125,9 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         frame_count = self.animation_max_length // 2
         res = []
         image0 = self.generate_image(board)
-        for i in range(frame_count):
-            shift = (self.tile_size * (i + 1)) // frame_count
-            frame = move_func(image0, shift)
+        factors = np.linspace(0, 1, frame_count+1)[1:]
+        for factor in factors:
+            frame = move_func(image0, factor)
             res.append(frame)
         return res
 
@@ -137,6 +141,9 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
             self.frame = self.animation.pop(0)
         return self.frame
 
+    def get_tile_size(self) -> int:
+        return self.tile_size
+
 
 class RubiksCross:
     class Action(enum.Enum):
@@ -149,11 +156,27 @@ class RubiksCross:
         SCRAMBLE = enum.auto()
 
     @staticmethod
-    def cross_roll_right(board, shift=1):
+    def cross_rot90_right(board, factor: float = 1.0):
         h, w = board.shape[:2]
         assert h % 3 == 0
         assert h == w
 
+        center_xy = (w/2-0.5, h/2-0.5)
+        mat = cv2.getRotationMatrix2D(center=center_xy, angle=-90 * factor, scale=1)
+        board = cv2.warpAffine(board, mat, (w, h))
+        return board
+
+    @staticmethod
+    def cross_rot90_left(board, factor: float = 1.0):
+        return RubiksCross.cross_rot90_right(board, -factor)
+
+    @staticmethod
+    def cross_roll_right(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
+        h, w = board.shape[:2]
+        assert h % 3 == 0
+        assert h == w
+
+        shift = int(round(shift * factor))
         n = h // 3
         board = board.copy()
         board[:n, n:2 * n] = np.roll(board[:n, n:2 * n], shift=shift, axis=1)
@@ -162,17 +185,16 @@ class RubiksCross:
         return board
 
     @staticmethod
-    def cross_roll_left(board, shift=1):
-        return RubiksCross.cross_roll_right(board, -shift)
+    def cross_roll_left(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
+        return RubiksCross.cross_roll_right(board, -shift, factor)
 
     @staticmethod
-    def cross_roll_up(board: npt.NDArray, shift=1):
-        return RubiksCross.cross_roll_left(board.swapaxes(0, 1), shift).swapaxes(0, 1)
+    def cross_roll_up(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
+        return RubiksCross.cross_roll_left(board.swapaxes(0, 1), shift, factor).swapaxes(0, 1)
 
     @staticmethod
-    def cross_roll_down(board, shift=1):
-        return RubiksCross.cross_roll_right(board.swapaxes(0, 1), shift).swapaxes(0, 1)
-
+    def cross_roll_down(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
+        return RubiksCross.cross_roll_right(board.swapaxes(0, 1), shift, factor).swapaxes(0, 1)
 
     def __init__(self, rcgraphics: RubiksCrossGraphicsInterface):
         self.rcgraphics: RubiksCrossGraphicsInterface = rcgraphics
@@ -182,7 +204,19 @@ class RubiksCross:
             RubiksCross.Action.LEFT: RubiksCross.cross_roll_left,
             RubiksCross.Action.UP: RubiksCross.cross_roll_up,
             RubiksCross.Action.DOWN: RubiksCross.cross_roll_down,
+            RubiksCross.Action.ROT_RIGHT: RubiksCross.cross_rot90_right,
+            RubiksCross.Action.ROT_LEFT: RubiksCross.cross_rot90_left,
         }
+        self.roll_actions = [
+            RubiksCross.Action.RIGHT,
+            RubiksCross.Action.LEFT,
+            RubiksCross.Action.UP,
+            RubiksCross.Action.DOWN,
+        ]
+        self.rot_actions = [
+            RubiksCross.Action.ROT_RIGHT,
+            RubiksCross.Action.ROT_LEFT,
+        ]
 
         self.init_2x2x5 = np.array([
             [0, 0, 1, 1, 0, 0],
@@ -206,9 +240,15 @@ class RubiksCross:
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.RIGHT, RubiksCross.Action.UP, RubiksCross.Action.DOWN][rn]
                 self.on_action(action)
         else:
-            roll_func = self.action_func_map[action]
-            self.rcgraphics.update_animation(roll_func, self.board)
-            self.board = roll_func(self.board)
+            move_func = self.action_func_map[action]
+            tile_size = self.rcgraphics.get_tile_size()
+
+            anim_move_func = move_func
+            if action in self.roll_actions:
+                anim_move_func = lambda b, f: move_func(board=b, shift=tile_size, factor=f)
+
+            self.rcgraphics.update_animation(anim_move_func, self.board)
+            self.board = move_func(self.board)
 
     def is_solved(self):
         return np.sum(abs(self.board - self.init_2x2x5).flatten()) == 0
@@ -294,7 +334,7 @@ class GameScreen:
 
 
 def run_rubikscross(screen, tiles):
-    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
+    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=15)
     rubikscross = RubiksCross(cpgraphics)
 
     inputs_action_map = {
@@ -330,11 +370,11 @@ def main_game():
 
     colors = np.array([
         [0, 0, 0],
-        [255, 0, 0],
-        [0, 255, 0],
-        [0, 0, 255],
-        [255, 255, 0],
-        [255, 255, 255],
+        [87, 77, 104],
+        [100, 143, 133],
+        [249, 220, 92],
+        [245, 100, 118],
+        [209, 217, 210],
     ], dtype=np.uint8)
 
     tiles = []
