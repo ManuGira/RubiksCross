@@ -253,18 +253,8 @@ class RubiksCross:
         return np.sum(abs(self.board - self.init_board).flatten()) == 0
 
 
-class GameScreen:
-    SIZE = 720
-    FPS = 60
-
-    def __init__(self):
-
-        self.local_screen = pygame.display.set_mode(
-            [GameScreen.SIZE, GameScreen.SIZE]
-        )
-        self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont(None, 24)
-
+class GameAppInterface(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
     def set_image_u8(self, img_u8: npt.NDArray):
         """
         Sets the image to be displayed.
@@ -274,14 +264,33 @@ class GameScreen:
 
         For float images, see function: set_image
         """
+        pass
 
+
+
+
+class GameApp_PyGame(GameAppInterface):
+    SIZE = 720
+    FPS = 60
+
+    def __init__(self, rubikscross: RubiksCross):
+        self.rubikscross = rubikscross
+
+        pygame.init()
+        self.screen = pygame.display.set_mode(
+            [GameApp_PyGame.SIZE, GameApp_PyGame.SIZE]
+        )
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.SysFont(None, 24)
+
+    def set_image_u8(self, img_u8: npt.NDArray):
         if img_u8.dtype != np.uint8:
             raise ValueError("Image type must be uint8")
 
-        self.local_screen.fill((0, 0, 0))
+        self.screen.fill((0, 0, 0))
 
         grid_size_hw = img_u8.shape[:2]
-        dot_size = GameScreen.SIZE / max(grid_size_hw)
+        dot_size = GameApp_PyGame.SIZE / max(grid_size_hw)
 
         for i in range(img_u8.shape[0]):
             for j in range(img_u8.shape[1]):
@@ -293,60 +302,54 @@ class GameScreen:
                     print()
                 center_xy = (dot_size * (j + 0.5), dot_size * (i + 0.5))
                 pygame.draw.circle(
-                    self.local_screen,
+                    self.screen,
                     pixel_rgb,
                     center_xy,
                     dot_size / 2,
                 )
 
-        current_fps = self.clock.get_fps()
-        fps_img = self.font.render(f"FPS: {current_fps:.1f}", True, (0, 100, 0))
-        self.local_screen.blit(fps_img, (0, 0))
-        pygame.display.flip()
-        self.frame_timing = self.clock.tick(GameScreen.FPS)
+    def run(self):
+        inputs_action_map = {
+            pygame.K_LEFT: RubiksCross.Action.LEFT,
+            pygame.K_a: RubiksCross.Action.LEFT,
+            pygame.K_RIGHT: RubiksCross.Action.RIGHT,
+            pygame.K_d: RubiksCross.Action.RIGHT,
+            pygame.K_UP: RubiksCross.Action.UP,
+            pygame.K_w: RubiksCross.Action.UP,
+            pygame.K_DOWN: RubiksCross.Action.DOWN,
+            pygame.K_s: RubiksCross.Action.DOWN,
+            pygame.K_e: RubiksCross.Action.ROT_RIGHT,
+            pygame.K_q: RubiksCross.Action.ROT_LEFT,
+            pygame.K_SPACE: RubiksCross.Action.SCRAMBLE,
+        }
+
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key in inputs_action_map.keys():
+                        self.rubikscross.on_action(inputs_action_map[event.key])
+
+            image = self.rubikscross.rcgraphics.get_next_frame()
+            self.set_image_u8(image)
+
+            current_fps = self.clock.get_fps()
+            fps_img = self.font.render(f"FPS: {current_fps:.1f}", True, (0, 100, 0))
+            self.screen.blit(fps_img, (0, 0))
+            pygame.display.flip()
+            self.frame_timing = self.clock.tick(GameApp_PyGame.FPS)
 
 
-def run_rubikscross(screen, tiles, difficulty=2):
-    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
-    rubikscross = RubiksCross(cpgraphics, difficulty=difficulty)
 
-    inputs_action_map = {
-        pygame.K_LEFT: RubiksCross.Action.LEFT,
-        pygame.K_a: RubiksCross.Action.LEFT,
-        pygame.K_RIGHT: RubiksCross.Action.RIGHT,
-        pygame.K_d: RubiksCross.Action.RIGHT,
-        pygame.K_UP: RubiksCross.Action.UP,
-        pygame.K_w: RubiksCross.Action.UP,
-        pygame.K_DOWN: RubiksCross.Action.DOWN,
-        pygame.K_s: RubiksCross.Action.DOWN,
-        pygame.K_e: RubiksCross.Action.ROT_RIGHT,
-        pygame.K_q: RubiksCross.Action.ROT_LEFT,
-        pygame.K_SPACE: RubiksCross.Action.SCRAMBLE,
-    }
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key in inputs_action_map.keys():
-                    rubikscross.on_action(inputs_action_map[event.key])
-
-        image = rubikscross.rcgraphics.get_next_frame()
-        screen.set_image_u8(image)
-
-
-def main_game(difficulty:int=2):
-    pygame.init()
-    screen = GameScreen()
-
+def main_game(difficulty: int = 2):
     colors = np.array([
         [0, 0, 0],
-        [87, 77, 104],
-        [100, 143, 133],
         [249, 220, 92],
         [245, 100, 118],
+        [98, 113, 231],
+        [61, 204, 202],
         [209, 217, 210],
     ], dtype=np.uint8)
 
@@ -356,7 +359,11 @@ def main_game(difficulty:int=2):
         color = color.reshape((1, 1, 3))
         tiles.append((1 - tile) * color)
 
-    run_rubikscross(screen, tiles, difficulty)
+    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
+    rubikscross = RubiksCross(cpgraphics, difficulty=difficulty)
+
+    GameApp_PyGame(rubikscross).run()
+
 
 
 if __name__ == '__main__':
