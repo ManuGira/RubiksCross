@@ -236,8 +236,10 @@ class RubiksCross:
 
     def on_action(self, action: 'RubiksCross.Action'):
         if action == RubiksCross.Action.SCRAMBLE:
-            for rn in np.random.randint(0, 4, 10):
-                action = [RubiksCross.Action.LEFT, RubiksCross.Action.RIGHT, RubiksCross.Action.UP, RubiksCross.Action.DOWN][rn]
+            ind = np.random.randint(0, 4, 1)[0]
+            for rn in np.random.randint(1, 4, 10):
+                ind = (ind+2+rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
+                action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
                 self.on_action(action)
         else:
             move_func = self.action_func_map[action]
