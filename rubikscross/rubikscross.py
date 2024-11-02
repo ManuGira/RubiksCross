@@ -122,10 +122,10 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
             animation.pop(ind)
 
     def generate_animation(self, move_func, board: npt.NDArray):
-        frame_count = self.animation_max_length // 2
+        frame_count = self.animation_max_length // 1
         res = []
         image0 = self.generate_image(board)
-        factors = np.linspace(0, 1, frame_count+1)[1:]
+        factors = np.linspace(0, 1, frame_count + 1)[1:]
         for factor in factors:
             frame = move_func(image0, factor)
             res.append(frame)
@@ -161,7 +161,7 @@ class RubiksCross:
         assert h % 3 == 0
         assert h == w
 
-        center_xy = (w/2-0.5, h/2-0.5)
+        center_xy = (w / 2 - 0.5, h / 2 - 0.5)
         mat = cv2.getRotationMatrix2D(center=center_xy, angle=-90 * factor, scale=1)
         board = cv2.warpAffine(board, mat, (w, h))
         return board
@@ -196,7 +196,7 @@ class RubiksCross:
     def cross_roll_down(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
         return RubiksCross.cross_roll_right(board.swapaxes(0, 1), shift, factor).swapaxes(0, 1)
 
-    def __init__(self, rcgraphics: RubiksCrossGraphicsInterface):
+    def __init__(self, rcgraphics: RubiksCrossGraphicsInterface, difficulty: int = 2):
         self.rcgraphics: RubiksCrossGraphicsInterface = rcgraphics
 
         self.action_func_map = {
@@ -217,28 +217,24 @@ class RubiksCross:
             RubiksCross.Action.ROT_RIGHT,
             RubiksCross.Action.ROT_LEFT,
         ]
-
-        self.init_2x2x5 = np.array([
-            [0, 0, 1, 1, 0, 0],
-            [0, 0, 1, 1, 0, 0],
-            [2, 2, 3, 3, 4, 4],
-            [2, 2, 3, 3, 4, 4],
-            [0, 0, 5, 5, 0, 0],
-            [0, 0, 5, 5, 0, 0],
-        ], dtype=np.uint8)
+        self.init_board = np.array([
+            [0, 1, 0],
+            [2, 3, 4],
+            [0, 5, 0],
+        ], dtype=np.uint8).repeat(difficulty, axis=0).repeat(difficulty, axis=1)
 
         self.board: npt.NDArray
         self.reset()
 
     def reset(self):
-        self.board = self.init_2x2x5.copy()
+        self.board = self.init_board.copy()
         self.rcgraphics.initialize_frame0(self.board)
 
     def on_action(self, action: 'RubiksCross.Action'):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
             for rn in np.random.randint(1, 4, 10):
-                ind = (ind+2+rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
+                ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
                 self.on_action(action)
         else:
@@ -251,23 +247,22 @@ class RubiksCross:
 
             self.rcgraphics.update_animation(anim_move_func, self.board)
             self.board = move_func(self.board)
+            print(str(action))
 
     def is_solved(self):
-        return np.sum(abs(self.board - self.init_2x2x5).flatten()) == 0
+        return np.sum(abs(self.board - self.init_board).flatten()) == 0
 
 
 class GameScreen:
-    PANEL_SIZE = 16  # Size of a single panel on the cross, in pixels
-    SCREEN_SIZE = 3 * PANEL_SIZE  # Width and height of the cross, in pixels
-    PIXEL_SIZE = 16  # Width of each square representing an LED
-    PIXEL_RADIUS_RATIO = 1  # Relative diameter of each LED
+    SIZE = 720
+    FPS = 60
 
     def __init__(self):
+
         self.local_screen = pygame.display.set_mode(
-            [GameScreen.PIXEL_SIZE * GameScreen.SCREEN_SIZE, GameScreen.PIXEL_SIZE * GameScreen.SCREEN_SIZE]
+            [GameScreen.SIZE, GameScreen.SIZE]
         )
         self.clock = pygame.time.Clock()
-        self.fps = 60
         self.font = pygame.font.SysFont(None, 24)
 
     def set_image_u8(self, img_u8: npt.NDArray):
@@ -279,15 +274,14 @@ class GameScreen:
 
         For float images, see function: set_image
         """
-        if img_u8.shape[:2] != (GameScreen.SCREEN_SIZE, GameScreen.SCREEN_SIZE):
-            raise ValueError(
-                f"Invalid image size (expected {GameScreen.SCREEN_SIZE}x{GameScreen.SCREEN_SIZE}, got {img_u8.shape})"
-            )
 
         if img_u8.dtype != np.uint8:
             raise ValueError("Image type must be uint8")
 
         self.local_screen.fill((0, 0, 0))
+
+        grid_size_hw = img_u8.shape[:2]
+        dot_size = GameScreen.SIZE / max(grid_size_hw)
 
         for i in range(img_u8.shape[0]):
             for j in range(img_u8.shape[1]):
@@ -297,47 +291,24 @@ class GameScreen:
                         continue
                 except:
                     print()
-                center_xy = (GameScreen.PIXEL_SIZE * (j + 0.5), GameScreen.PIXEL_SIZE * (i + 0.5))
+                center_xy = (dot_size * (j + 0.5), dot_size * (i + 0.5))
                 pygame.draw.circle(
                     self.local_screen,
                     pixel_rgb,
                     center_xy,
-                    GameScreen.PIXEL_SIZE * GameScreen.PIXEL_RADIUS_RATIO / 2,
+                    dot_size / 2,
                 )
 
         current_fps = self.clock.get_fps()
         fps_img = self.font.render(f"FPS: {current_fps:.1f}", True, (0, 100, 0))
         self.local_screen.blit(fps_img, (0, 0))
         pygame.display.flip()
-        self.frame_timing = self.clock.tick(self.fps)
-
-    def set_image(self, image: list[list[float]]):
-        """
-        Sets the image to be displayed.
-
-        The `image` argument should be an array of floats representing the pixels in (row, column) order.
-        Values range from 0.0 (off) to 1.0 (brightest).
-        Note that 4 sections of the image will be ignored as the screen is a cross.
-
-        For uint8 images, see function: set_image_u8
-        """
-        arr = np.array(image, dtype=float)
-
-        if arr.shape != (GameScreen.SCREEN_SIZE, GameScreen.SCREEN_SIZE):
-            raise ValueError(
-                f"Invalid image size (expected {GameScreen.SCREEN_SIZE}x{GameScreen.SCREEN_SIZE}, got {arr.shape})"
-            )
-
-        if arr.flatten().min() < 0.0 or 1.0 < arr.flatten().max():
-            raise ValueError("Pixel values must be between 0.0 and 1.0")
-
-        im8 = np.round(arr * 255).astype(np.uint8)
-        self.set_image_u8(im8)
+        self.frame_timing = self.clock.tick(GameScreen.FPS)
 
 
-def run_rubikscross(screen, tiles):
-    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=15)
-    rubikscross = RubiksCross(cpgraphics)
+def run_rubikscross(screen, tiles, difficulty=2):
+    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
+    rubikscross = RubiksCross(cpgraphics, difficulty=difficulty)
 
     inputs_action_map = {
         pygame.K_LEFT: RubiksCross.Action.LEFT,
@@ -366,7 +337,7 @@ def run_rubikscross(screen, tiles):
         screen.set_image_u8(image)
 
 
-def main_game():
+def main_game(difficulty:int=2):
     pygame.init()
     screen = GameScreen()
 
@@ -385,9 +356,8 @@ def main_game():
         color = color.reshape((1, 1, 3))
         tiles.append((1 - tile) * color)
 
-    run_rubikscross(screen, tiles)
+    run_rubikscross(screen, tiles, difficulty)
 
 
 if __name__ == '__main__':
-    # main_croixpharmacie()
-    main_game()
+    main_game(2)
