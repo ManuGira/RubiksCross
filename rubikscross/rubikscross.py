@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import pygame
 import numpy.typing as npt
+import time
 
 TILE_SIZE = 8
 TILES = [
@@ -198,6 +199,7 @@ class RubiksCross:
 
     def __init__(self, rcgraphics: RubiksCrossGraphicsInterface, difficulty: int = 2):
         self.rcgraphics: RubiksCrossGraphicsInterface = rcgraphics
+        self.difficulty = difficulty
 
         self.action_func_map = {
             RubiksCross.Action.RIGHT: RubiksCross.cross_roll_right,
@@ -233,7 +235,7 @@ class RubiksCross:
     def on_action(self, action: 'RubiksCross.Action'):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
-            for rn in np.random.randint(1, 4, 10):
+            for rn in np.random.randint(1, 4, 10*self.difficulty**2):
                 ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
                 self.on_action(action)
@@ -247,7 +249,6 @@ class RubiksCross:
 
             self.rcgraphics.update_animation(anim_move_func, self.board)
             self.board = move_func(self.board)
-            print(str(action))
 
     def is_solved(self):
         return np.sum(abs(self.board - self.init_board).flatten()) == 0
@@ -266,6 +267,76 @@ class GameAppInterface(metaclass=abc.ABCMeta):
         """
         pass
 
+    @abc.abstractmethod
+    def run(self):
+        pass
+
+
+class CV2(enum.IntEnum):
+    """
+    Keyboard mapping
+    """
+    K_ENTER = 13
+    K_SPACE = 32
+    K_a = 97
+    K_d = 100
+    K_e = 101
+    K_q = 113
+    K_s = 115
+    K_w = 119
+    K_LEFT = 2424832
+    K_UP = 2490368
+    K_RIGHT = 2555904
+    K_DOWN = 2621440
+
+
+class GameApp_cv2(GameAppInterface):
+    FPS = 60
+
+    def __init__(self, rubikscross: RubiksCross):
+        self.rubikscross = rubikscross
+        self.time = 0
+
+    def set_image_u8(self, img_u8: npt.NDArray):
+        img_u8 = cv2.resize(img_u8, dsize=(720, 720), interpolation=cv2.INTER_NEAREST)
+        cv2.imshow("Rubik's Cross", img_u8)
+
+    def run(self):
+        inputs_action_map = {
+            CV2.K_LEFT: RubiksCross.Action.LEFT,
+            CV2.K_a: RubiksCross.Action.LEFT,
+            CV2.K_RIGHT: RubiksCross.Action.RIGHT,
+            CV2.K_d: RubiksCross.Action.RIGHT,
+            CV2.K_UP: RubiksCross.Action.UP,
+            CV2.K_w: RubiksCross.Action.UP,
+            CV2.K_DOWN: RubiksCross.Action.DOWN,
+            CV2.K_s: RubiksCross.Action.DOWN,
+            CV2.K_e: RubiksCross.Action.ROT_RIGHT,
+            CV2.K_q: RubiksCross.Action.ROT_LEFT,
+            CV2.K_SPACE: RubiksCross.Action.SCRAMBLE,
+        }
+
+        next_frame_time = time.time()
+        event_key_list = []
+        frame_duration = 1 / GameApp_cv2.FPS
+        while True: #self.win.is_alive:
+            now = time.time()
+            sleep_time_ms = int((next_frame_time - now) * 1000)
+            event_key = cv2.waitKeyEx(max(1, sleep_time_ms))
+
+            if event_key != -1:
+                event_key_list.append(event_key)
+                continue
+
+            while len(event_key_list) > 0:
+                event_key = event_key_list.pop(0)
+                if event_key in inputs_action_map.keys():
+                    self.rubikscross.on_action(inputs_action_map[event_key])
+
+            image = self.rubikscross.rcgraphics.get_next_frame()
+            self.set_image_u8(image)
+            next_frame_time += frame_duration
+            next_frame_time = max(time.time(), next_frame_time)
 
 
 
@@ -296,7 +367,7 @@ class GameApp_PyGame(GameAppInterface):
             for j in range(img_u8.shape[1]):
                 pixel_rgb = img_u8[i, j]
                 try:
-                    if sum(abs(pixel_rgb).flatten()) == 0:
+                    if sum(abs(pixel_rgb.flatten())) == 0:
                         continue
                 except:
                     print()
@@ -341,9 +412,8 @@ class GameApp_PyGame(GameAppInterface):
             pygame.display.flip()
             self.frame_timing = self.clock.tick(GameApp_PyGame.FPS)
 
-
-
 def main_game(difficulty: int = 2):
+    assert difficulty < 11
     colors = np.array([
         [0, 0, 0],
         [249, 220, 92],
@@ -362,9 +432,9 @@ def main_game(difficulty: int = 2):
     cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
     rubikscross = RubiksCross(cpgraphics, difficulty=difficulty)
 
-    GameApp_PyGame(rubikscross).run()
-
+    # GameApp_PyGame(rubikscross).run()
+    GameApp_cv2(rubikscross).run()
 
 
 if __name__ == '__main__':
-    main_game(2)
+    main_game(3)
