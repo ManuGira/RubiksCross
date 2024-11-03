@@ -64,6 +64,19 @@ TILES = [
 ]
 
 
+class RubiksCrossMixer:
+    def __init__(self):
+        pygame.init()
+        self.sounds = {
+            RubiksCross.Action.UP: pygame.mixer.Sound(f"assets/1.wav"),
+            RubiksCross.Action.DOWN: pygame.mixer.Sound(f"assets/2.wav"),
+            RubiksCross.Action.LEFT: pygame.mixer.Sound(f"assets/3.wav"),
+            RubiksCross.Action.RIGHT: pygame.mixer.Sound(f"assets/4.wav"),
+            RubiksCross.Action.ROT_LEFT: pygame.mixer.Sound(f"assets/5.wav"),
+            RubiksCross.Action.ROT_RIGHT: pygame.mixer.Sound(f"assets/6.wav"),
+        }
+
+
 class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def initialize_frame0(self, board: npt.NDArray):
@@ -156,6 +169,12 @@ class RubiksCross:
         ROT_LEFT = enum.auto()
         ROT_RIGHT = enum.auto()
         SCRAMBLE = enum.auto()
+        SAVE1 = enum.auto()
+        SAVE2 = enum.auto()
+        SAVE3 = enum.auto()
+        LOAD1 = enum.auto()
+        LOAD2 = enum.auto()
+        LOAD3 = enum.auto()
 
     @staticmethod
     def cross_rot90_right(board, factor: float = 1.0):
@@ -200,6 +219,7 @@ class RubiksCross:
 
     def __init__(self, rcgraphics: RubiksCrossGraphicsInterface, difficulty: int = 2):
         self.rcgraphics: RubiksCrossGraphicsInterface = rcgraphics
+        self.rcmixer: RubiksCrossMixer = RubiksCrossMixer()
         self.difficulty = difficulty
 
         self.action_func_map = {
@@ -234,6 +254,7 @@ class RubiksCross:
         self.rcgraphics.initialize_frame0(self.board)
 
     def on_action(self, action: 'RubiksCross.Action', frame_count: int | None = None):
+    def on_action(self, action: 'RubiksCross.Action', sound: bool = True, frame_count: int | None = None):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
             for rn in np.random.randint(1, 4, 10 * self.difficulty ** 2):
@@ -247,6 +268,9 @@ class RubiksCross:
             anim_move_func = move_func
             if action in self.roll_actions:
                 anim_move_func = lambda b, f: move_func(board=b, shift=tile_size, factor=f)
+
+            if sound and action in self.rcmixer.sounds.keys():
+                pygame.mixer.Sound.play(self.rcmixer.sounds[action])
 
             self.rcgraphics.update_animation(anim_move_func, self.board, frame_count)
             self.board = move_func(self.board)
