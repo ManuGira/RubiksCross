@@ -94,7 +94,15 @@ class PyGameMixer(RubiksCrossMixerInterface):
 
 class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def initialize_frame0(self, board: npt.NDArray):
+    def initialize_frame(self, board: npt.NDArray):
+        pass
+
+    @abc.abstractmethod
+    def initialize_hint_frame(self, board: npt.NDArray):
+        pass
+
+    @abc.abstractmethod
+    def generate_frame(self, board: npt.NDArray) -> npt.NDArray:
         pass
 
     @abc.abstractmethod
@@ -106,21 +114,36 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def get_hint_frame(self) -> npt.NDArray:
+        pass
+
+    @abc.abstractmethod
     def get_tile_size(self) -> int:
         pass
 
 
 class CroixPharamGraphics(RubiksCrossGraphicsInterface):
-    def __init__(self, tiles: list[npt.NDArray], animation_max_length: int):
-        self.tiles: list[npt.NDArray] = tiles
+    def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, animation_max_length: int):
+        self.colors = colors.copy()
+
+        # colorize tiles
+        self.tiles = []
+        for tile, color in zip(tiles, colors):
+            tile = tile.reshape((*tile.shape, 1))
+            color = color.reshape((1, 1, 3))
+            self.tiles.append((1 - tile) * color)
+
         self.tile_size = self.tiles[0].shape[0]
-        self.is_rgb: bool = len(tiles[0].shape) == 3
         self.animation_max_length: int = animation_max_length
         self.animation: list[npt.NDArray] = []
         self.frame: npt.NDArray
+        self.hint_frame: npt.NDArray
 
-    def initialize_frame0(self, board):
-        self.frame = self.generate_image(board)
+    def initialize_frame(self, board):
+        self.frame = self.generate_frame(board)
+
+    def initialize_hint_frame(self, initial_board):
+        self.hint_frame = self.generate_frame(initial_board)
 
     @staticmethod
     def insert_tile(image, tile, coord_ij):
@@ -128,18 +151,28 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         i, j = coord_ij
         image[i * th:(i + 1) * th, j * tw:(j + 1) * tw] = tile
 
-    def generate_image(self, board: npt.NDArray):
-        bh, bw = board.shape
-        th, tw = self.tiles[0].shape[:2]
-        frame_height = th * bh
-        frame_width = tw * bw
+    def generate_frame(self, board: npt.NDArray) -> npt.NDArray:
+        """
+        This will create an image made of tiles, placed according to the board.
 
-        if self.is_rgb:
-            res = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)
-        else:
-            res = np.zeros((frame_height, frame_width), dtype=np.uint8)
-        for i in range(bh):
-            for j in range(bw):
+        Each value in the board is used as an index. This index is used to select a tile in the tile list
+
+        Parameters
+        ----------
+        board: (m0, n0) array
+
+        Returns
+        -------
+        An array of dimension (m0*m1, n0*n1) where (m1, n1) is the dimension of the tiles
+        """
+        bsize = board.shape[0]
+        tsize = self.tiles[0].shape[0]
+        frame_size = bsize * tsize
+
+        res = np.zeros((frame_size, frame_size, 3), dtype=np.uint8)
+
+        for i in range(bsize):
+            for j in range(bsize):
                 ind = int(board[i, j])
                 CroixPharamGraphics.insert_tile(res, self.tiles[ind], (i, j))
         return res
@@ -154,7 +187,7 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
     def generate_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
         frame_count = (self.animation_max_length // 1) if (frame_count is None) else frame_count
         res = []
-        image0 = self.generate_image(board)
+        image0 = self.generate_frame(board)
         factors = np.linspace(0, 1, frame_count + 1)[1:]
         for factor in factors:
             frame = move_func(image0, factor)
@@ -170,6 +203,9 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         if len(self.animation) > 0:
             self.frame = self.animation.pop(0)
         return self.frame
+
+    def get_hint_frame(self) -> npt.NDArray:
+        return self.hint_frame
 
     def get_tile_size(self) -> int:
         return self.tile_size
@@ -293,7 +329,8 @@ class RubiksCross:
         self.move_count = 0
         self.state = RubiksCross.State.FREE
         self.board = self.init_board.copy()
-        self.rcgraphics.initialize_frame0(self.board)
+        self.rcgraphics.initialize_frame(self.board)
+        self.rcgraphics.initialize_hint_frame(self.init_board)
 
     def save_board(self, slot_id):
         self.state = RubiksCross.State.FREE
@@ -302,7 +339,7 @@ class RubiksCross:
     def load_board(self, slot_id):
         self.state = RubiksCross.State.FREE
         self.board = self.saved_boards[slot_id].copy()
-        self.rcgraphics.initialize_frame0(self.board)
+        self.rcgraphics.generate_frame(self.board)
 
     def update_chrono(self):
         if self.state == RubiksCross.State.RACING:
@@ -457,7 +494,7 @@ class GameApp_PyGame(GameAppInterface):
 
     @staticmethod
     @functools.lru_cache(maxsize=1)
-    def make_dot_mask_u16(grid_size):
+    def make_dot_mask(grid_size):
         dot_size = GameApp_PyGame.SIZE // grid_size
         rad = int(round(dot_size / 2))
 
@@ -466,27 +503,26 @@ class GameApp_PyGame(GameAppInterface):
         dot = cv2.circle(dot, (rad * 10, rad * 10), rad * 10, (255,), thickness=-1)
         dot = cv2.resize(dot, dsize=(dot_size, dot_size), interpolation=cv2.INTER_AREA)
 
-        dot_mask = cv2.repeat(dot.astype(np.uint16), grid_size, grid_size)
+        dot_mask = cv2.repeat(dot, grid_size, grid_size)
 
         if dot_mask.shape[0] != GameApp_PyGame.SIZE:
             dot_mask = cv2.resize(dot_mask, (GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_LINEAR)
 
-        dot_mask.shape += (1,)
         return dot_mask
 
     def set_image_u8(self, img_u8: npt.NDArray):
         if img_u8.dtype != np.uint8:
             raise ValueError("Image type must be uint8")
 
-        self.screen.fill((0, 0, 0))
-
-        dot_mask_u16 = GameApp_PyGame.make_dot_mask_u16(img_u8.shape[0])
+        dot_mask = GameApp_PyGame.make_dot_mask(img_u8.shape[0]).copy()
         img_u8 = cv2.transpose(img_u8)
         img_u8 = cv2.resize(img_u8, dsize=(GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
 
-        img_u8 = ((dot_mask_u16 * img_u8.astype(np.uint16)) // 255).astype(np.uint8)
+        dot_mask *= (cv2.cvtColor(img_u8, cv2.COLOR_RGB2GRAY) != 0).astype(np.uint8)
 
         surface = pygame.surfarray.make_surface(img_u8)
+        surface = surface.convert_alpha()  # Enable per-pixel alpha
+        pygame.surfarray.pixels_alpha(surface)[:, :] = dot_mask
         self.screen.blit(surface, (0, 0))
 
     def run(self):
@@ -519,18 +555,29 @@ class GameApp_PyGame(GameAppInterface):
                     if event.key in key_action_map.keys():
                         self.rubikscross.on_action(key_action_map[event.key])
 
+            self.screen.fill((0, 0, 0))
+
+            hint_frame = self.rubikscross.rcgraphics.get_hint_frame()
+            hint_frame = cv2.transpose(hint_frame)
+            hint_frame = cv2.resize(hint_frame, dsize=(GameApp_PyGame.SIZE // 5, GameApp_PyGame.SIZE // 5), interpolation=cv2.INTER_NEAREST)
+            background_surface = pygame.surfarray.make_surface(hint_frame)
+            self.screen.blit(background_surface, (
+                GameApp_PyGame.SIZE*11 // 15,
+                GameApp_PyGame.SIZE // 15,
+            ))
+
             image = self.rubikscross.rcgraphics.get_next_frame()
             self.set_image_u8(image)
 
             current_fps = self.clock.get_fps()
             fps_img = self.font.render(f"FPS: {current_fps:.1f}", True, (0, 100, 0))
-            self.screen.blit(fps_img, (0, 0))
+            self.screen.blit(fps_img, (5, 5))
 
-            chrono_img = self.font.render(f"Timer: {self.rubikscross.update_chrono(): 9.4f}", True, (0, 100, 0))
-            self.screen.blit(chrono_img, (0, 20))
+            chrono_img = self.font.render(f"Timer: {self.rubikscross.update_chrono(): 7.2f}", True, (0, 100, 0))
+            self.screen.blit(chrono_img, (5, 25))
 
             chrono_img = self.font.render(f"Moves: {self.rubikscross.move_count:4}", True, (0, 100, 0))
-            self.screen.blit(chrono_img, (0, 40))
+            self.screen.blit(chrono_img, (5, 45))
 
             pygame.display.flip()
             self.frame_timing = self.clock.tick(GameApp_PyGame.FPS)
@@ -547,15 +594,9 @@ def main_game(difficulty: int = 2):
         [98, 113, 231],  # dark blue
     ], dtype=np.uint8)
 
-    tiles = []
-    for tile, color in zip(TILES, colors):
-        tile = tile.reshape((*tile.shape, 1))
-        color = color.reshape((1, 1, 3))
-        tiles.append((1 - tile) * color)
-
     GameApp_PyGame(
         RubiksCross(
-            CroixPharamGraphics(tiles, animation_max_length=10),
+            CroixPharamGraphics(TILES, colors, animation_max_length=10),
             PyGameMixer(),
             difficulty=difficulty
         )).run()
