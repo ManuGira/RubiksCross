@@ -191,6 +191,12 @@ class RubiksCross:
         LOAD2 = enum.auto()
         LOAD3 = enum.auto()
 
+    class State(enum.Enum):
+        FREE = enum.auto()
+        SCRAMBLING = enum.auto()
+        READY = enum.auto()
+        RACING = enum.auto()
+
     @staticmethod
     def cross_rot90_right(board, factor: float = 1.0):
         h, w = board.shape[:2]
@@ -236,6 +242,7 @@ class RubiksCross:
         self.rcgraphics: RubiksCrossGraphicsInterface = rcgraphics
         self.rcmixer: RubiksCrossMixerInterface = rcmixer
         self.difficulty = difficulty
+        self.state = RubiksCross.State.FREE
 
         self.action_func_map = {
             RubiksCross.Action.RIGHT: RubiksCross.cross_roll_right,
@@ -274,30 +281,44 @@ class RubiksCross:
         ], dtype=np.uint8).repeat(difficulty, axis=0).repeat(difficulty, axis=1)
 
         self.board: npt.NDArray
+        self.chrono: float
+        self.time0: float
+        self.move_count: float
         self.reset()
 
         self.saved_boards = [self.init_board.copy() for _ in range(len(self.save_actions))]
 
     def reset(self):
+        self.chrono = 0
+        self.move_count = 0
+        self.state = RubiksCross.State.FREE
         self.board = self.init_board.copy()
         self.rcgraphics.initialize_frame0(self.board)
 
     def save_board(self, slot_id):
-        print("Save board", slot_id + 1)
+        self.state = RubiksCross.State.FREE
         self.saved_boards[slot_id] = self.board.copy()
 
     def load_board(self, slot_id):
-        print("Load board", slot_id + 1)
+        self.state = RubiksCross.State.FREE
         self.board = self.saved_boards[slot_id].copy()
         self.rcgraphics.initialize_frame0(self.board)
 
+    def update_chrono(self):
+        if self.state == RubiksCross.State.RACING:
+            self.chrono = time.time() - self.time0
+        return self.chrono
+
     def on_action(self, action: 'RubiksCross.Action', mute_sound: bool = False, frame_count: int | None = None):
         if action == RubiksCross.Action.SCRAMBLE:
+            self.reset()
+            self.state = RubiksCross.State.SCRAMBLING
             ind = np.random.randint(0, 4, 1)[0]
             for rn in np.random.randint(1, 4, 10 * self.difficulty ** 2):
-                ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
+                ind = (ind + 2 + rn) % 4  # avoid to take the opposite of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
                 self.on_action(action, mute_sound=True, frame_count=1)
+            self.state = RubiksCross.State.READY
         elif action in self.save_actions:
             slot_ind = self.save_actions.index(action)
             self.save_board(slot_ind)
@@ -317,6 +338,16 @@ class RubiksCross:
 
             self.rcgraphics.update_animation(anim_move_func, self.board, frame_count)
             self.board = move_func(self.board)
+
+            match self.state:
+                case RubiksCross.State.READY:
+                    self.time0 = time.time()
+                    self.state = RubiksCross.State.RACING
+                    self.move_count = 1
+                case RubiksCross.State.RACING:
+                    self.move_count += 1
+                    if self.is_solved():
+                        self.state = RubiksCross.State.FREE
 
     def is_solved(self):
         return np.sum(abs(self.board - self.init_board).flatten()) == 0
@@ -494,6 +525,13 @@ class GameApp_PyGame(GameAppInterface):
             current_fps = self.clock.get_fps()
             fps_img = self.font.render(f"FPS: {current_fps:.1f}", True, (0, 100, 0))
             self.screen.blit(fps_img, (0, 0))
+
+            chrono_img = self.font.render(f"Timer: {self.rubikscross.update_chrono(): 9.4f}", True, (0, 100, 0))
+            self.screen.blit(chrono_img, (0, 20))
+
+            chrono_img = self.font.render(f"Moves: {self.rubikscross.move_count:4}", True, (0, 100, 0))
+            self.screen.blit(chrono_img, (0, 40))
+
             pygame.display.flip()
             self.frame_timing = self.clock.tick(GameApp_PyGame.FPS)
 
@@ -501,12 +539,12 @@ class GameApp_PyGame(GameAppInterface):
 def main_game(difficulty: int = 2):
     assert difficulty < 11
     colors = np.array([
-        [0, 0, 0],
-        [249, 220, 92],
-        [245, 100, 118],
-        [98, 113, 231],
-        [61, 204, 202],
-        [209, 217, 210],
+        [0, 0, 0],  # black
+        [61, 204, 202],  # cyan
+        [245, 100, 118],  # red
+        [209, 217, 210],  # light gray
+        [249, 220, 92],  # yellow
+        [98, 113, 231],  # dark blue
     ], dtype=np.uint8)
 
     tiles = []
@@ -514,7 +552,6 @@ def main_game(difficulty: int = 2):
         tile = tile.reshape((*tile.shape, 1))
         color = color.reshape((1, 1, 3))
         tiles.append((1 - tile) * color)
-
 
     GameApp_PyGame(
         RubiksCross(
