@@ -240,6 +240,19 @@ class RubiksCross:
             RubiksCross.Action.ROT_RIGHT,
             RubiksCross.Action.ROT_LEFT,
         ]
+        self.save_actions = [
+            RubiksCross.Action.SAVE1,
+            RubiksCross.Action.SAVE2,
+            RubiksCross.Action.SAVE3,
+        ]
+        self.load_actions = [
+            RubiksCross.Action.LOAD1,
+            RubiksCross.Action.LOAD2,
+            RubiksCross.Action.LOAD3,
+        ]
+        self.memory_actions = self.save_actions + self.load_actions
+
+
         self.init_board = np.array([
             [0, 1, 0],
             [2, 3, 4],
@@ -249,18 +262,34 @@ class RubiksCross:
         self.board: npt.NDArray
         self.reset()
 
+        self.saved_boards = [self.init_board.copy() for _ in range(len(self.save_actions))]
+
     def reset(self):
         self.board = self.init_board.copy()
         self.rcgraphics.initialize_frame0(self.board)
 
-    def on_action(self, action: 'RubiksCross.Action', frame_count: int | None = None):
+    def save_board(self, slot_id):
+        print("Save board", slot_id+1)
+        self.saved_boards[slot_id] = self.board.copy()
+
+    def load_board(self, slot_id):
+        print("Load board", slot_id+1)
+        self.board = self.saved_boards[slot_id].copy()
+        self.rcgraphics.initialize_frame0(self.board)
+
     def on_action(self, action: 'RubiksCross.Action', sound: bool = True, frame_count: int | None = None):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
             for rn in np.random.randint(1, 4, 10 * self.difficulty ** 2):
                 ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
-                self.on_action(action, frame_count=1)
+                self.on_action(action, sound=False, frame_count=1)
+        elif action in self.save_actions:
+            slot_ind = self.save_actions.index(action)
+            self.save_board(slot_ind)
+        elif action in self.load_actions:
+            slot_ind = self.load_actions.index(action)
+            self.load_board(slot_ind)
         else:
             move_func = self.action_func_map[action]
             tile_size = self.rcgraphics.get_tile_size()
@@ -416,7 +445,7 @@ class GameApp_PyGame(GameAppInterface):
         self.screen.blit(surface, (0, 0))
 
     def run(self):
-        inputs_action_map = {
+        key_action_map = {
             pygame.K_LEFT: RubiksCross.Action.LEFT,
             pygame.K_a: RubiksCross.Action.LEFT,
             pygame.K_RIGHT: RubiksCross.Action.RIGHT,
@@ -428,6 +457,12 @@ class GameApp_PyGame(GameAppInterface):
             pygame.K_e: RubiksCross.Action.ROT_RIGHT,
             pygame.K_q: RubiksCross.Action.ROT_LEFT,
             pygame.K_SPACE: RubiksCross.Action.SCRAMBLE,
+            pygame.K_1: RubiksCross.Action.SAVE1,
+            pygame.K_2: RubiksCross.Action.SAVE2,
+            pygame.K_3: RubiksCross.Action.SAVE3,
+            pygame.K_F1: RubiksCross.Action.LOAD1,
+            pygame.K_F2: RubiksCross.Action.LOAD2,
+            pygame.K_F3: RubiksCross.Action.LOAD3,
         }
 
         while True:
@@ -436,8 +471,8 @@ class GameApp_PyGame(GameAppInterface):
                     pygame.quit()
                     sys.exit()
                 elif event.type == pygame.KEYDOWN:
-                    if event.key in inputs_action_map.keys():
-                        self.rubikscross.on_action(inputs_action_map[event.key])
+                    if event.key in key_action_map.keys():
+                        self.rubikscross.on_action(key_action_map[event.key])
 
             image = self.rubikscross.rcgraphics.get_next_frame()
             self.set_image_u8(image)
