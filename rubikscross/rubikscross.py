@@ -64,7 +64,18 @@ TILES = [
 ]
 
 
-class RubiksCrossMixer:
+class RubiksCrossMixerInterface(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def play_sound(self, action: "RubiksCross.Action"):
+        pass
+
+
+class SilentMixer(RubiksCrossMixerInterface):
+    def play_sound(self, action):
+        pass
+
+
+class PyGameMixer(RubiksCrossMixerInterface):
     def __init__(self):
         pygame.init()
         self.sounds = {
@@ -75,6 +86,10 @@ class RubiksCrossMixer:
             RubiksCross.Action.ROT_LEFT: pygame.mixer.Sound(f"assets/5.wav"),
             RubiksCross.Action.ROT_RIGHT: pygame.mixer.Sound(f"assets/6.wav"),
         }
+
+    def play_sound(self, action):
+        if action in self.sounds.keys():
+            pygame.mixer.Sound.play(self.sounds[action])
 
 
 class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
@@ -217,9 +232,9 @@ class RubiksCross:
     def cross_roll_down(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
         return RubiksCross.cross_roll_right(board.swapaxes(0, 1), shift, factor).swapaxes(0, 1)
 
-    def __init__(self, rcgraphics: RubiksCrossGraphicsInterface, difficulty: int = 2):
+    def __init__(self, rcgraphics: RubiksCrossGraphicsInterface, rcmixer: RubiksCrossMixerInterface, difficulty: int = 2):
         self.rcgraphics: RubiksCrossGraphicsInterface = rcgraphics
-        self.rcmixer: RubiksCrossMixer = RubiksCrossMixer()
+        self.rcmixer: RubiksCrossMixerInterface = rcmixer
         self.difficulty = difficulty
 
         self.action_func_map = {
@@ -252,7 +267,6 @@ class RubiksCross:
         ]
         self.memory_actions = self.save_actions + self.load_actions
 
-
         self.init_board = np.array([
             [0, 1, 0],
             [2, 3, 4],
@@ -269,21 +283,21 @@ class RubiksCross:
         self.rcgraphics.initialize_frame0(self.board)
 
     def save_board(self, slot_id):
-        print("Save board", slot_id+1)
+        print("Save board", slot_id + 1)
         self.saved_boards[slot_id] = self.board.copy()
 
     def load_board(self, slot_id):
-        print("Load board", slot_id+1)
+        print("Load board", slot_id + 1)
         self.board = self.saved_boards[slot_id].copy()
         self.rcgraphics.initialize_frame0(self.board)
 
-    def on_action(self, action: 'RubiksCross.Action', sound: bool = True, frame_count: int | None = None):
+    def on_action(self, action: 'RubiksCross.Action', mute_sound: bool = False, frame_count: int | None = None):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
             for rn in np.random.randint(1, 4, 10 * self.difficulty ** 2):
                 ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
-                self.on_action(action, sound=False, frame_count=1)
+                self.on_action(action, mute_sound=True, frame_count=1)
         elif action in self.save_actions:
             slot_ind = self.save_actions.index(action)
             self.save_board(slot_ind)
@@ -298,8 +312,8 @@ class RubiksCross:
             if action in self.roll_actions:
                 anim_move_func = lambda b, f: move_func(board=b, shift=tile_size, factor=f)
 
-            if sound and action in self.rcmixer.sounds.keys():
-                pygame.mixer.Sound.play(self.rcmixer.sounds[action])
+            if not mute_sound:
+                self.rcmixer.play_sound(action)
 
             self.rcgraphics.update_animation(anim_move_func, self.board, frame_count)
             self.board = move_func(self.board)
@@ -501,12 +515,21 @@ def main_game(difficulty: int = 2):
         color = color.reshape((1, 1, 3))
         tiles.append((1 - tile) * color)
 
-    cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
-    rubikscross = RubiksCross(cpgraphics, difficulty=difficulty)
 
-    GameApp_PyGame(rubikscross).run()
-    # GameApp_cv2(rubikscross).run()
+    GameApp_PyGame(
+        RubiksCross(
+            CroixPharamGraphics(tiles, animation_max_length=10),
+            PyGameMixer(),
+            difficulty=difficulty
+        )).run()
+
+    # GameApp_cv2(
+    #     RubiksCross(
+    #         CroixPharamGraphics(tiles, animation_max_length=10),
+    #         SilentMixer(),
+    #         difficulty=difficulty
+    #     )).run()
 
 
 if __name__ == '__main__':
-    main_game(3)
+    main_game(2)
