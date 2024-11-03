@@ -70,7 +70,7 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def update_animation(self, move_func, board: npt.NDArray):
+    def update_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
         pass
 
     @abc.abstractmethod
@@ -123,8 +123,8 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
             ind = (i * current_length) // drop_count
             animation.pop(ind)
 
-    def generate_animation(self, move_func, board: npt.NDArray):
-        frame_count = self.animation_max_length // 1
+    def generate_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
+        frame_count = (self.animation_max_length // 1) if (frame_count is None) else frame_count
         res = []
         image0 = self.generate_image(board)
         factors = np.linspace(0, 1, frame_count + 1)[1:]
@@ -133,8 +133,8 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
             res.append(frame)
         return res
 
-    def update_animation(self, move_func, board: npt.NDArray):
-        new_frames = self.generate_animation(move_func, board)
+    def update_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
+        new_frames = self.generate_animation(move_func, board, frame_count)
         self.animation += new_frames
         self.drop_frames(self.animation, self.animation_max_length)
 
@@ -233,13 +233,13 @@ class RubiksCross:
         self.board = self.init_board.copy()
         self.rcgraphics.initialize_frame0(self.board)
 
-    def on_action(self, action: 'RubiksCross.Action'):
+    def on_action(self, action: 'RubiksCross.Action', frame_count: int | None = None):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
             for rn in np.random.randint(1, 4, 10 * self.difficulty ** 2):
                 ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
-                self.on_action(action)
+                self.on_action(action, frame_count=1)
         else:
             move_func = self.action_func_map[action]
             tile_size = self.rcgraphics.get_tile_size()
@@ -248,7 +248,7 @@ class RubiksCross:
             if action in self.roll_actions:
                 anim_move_func = lambda b, f: move_func(board=b, shift=tile_size, factor=f)
 
-            self.rcgraphics.update_animation(anim_move_func, self.board)
+            self.rcgraphics.update_animation(anim_move_func, self.board, frame_count)
             self.board = move_func(self.board)
 
     def is_solved(self):
@@ -361,11 +361,11 @@ class GameApp_PyGame(GameAppInterface):
     @functools.lru_cache(maxsize=1)
     def make_dot_mask_u16(grid_size):
         dot_size = GameApp_PyGame.SIZE // grid_size
-        rad = int(round(dot_size/2))
+        rad = int(round(dot_size / 2))
 
         # working on bigger circle to get a nice blend
-        dot = np.zeros((dot_size*10, dot_size*10), dtype=np.uint8)
-        dot = cv2.circle(dot, (rad*10, rad*10), rad*10, (255,), thickness=-1)
+        dot = np.zeros((dot_size * 10, dot_size * 10), dtype=np.uint8)
+        dot = cv2.circle(dot, (rad * 10, rad * 10), rad * 10, (255,), thickness=-1)
         dot = cv2.resize(dot, dsize=(dot_size, dot_size), interpolation=cv2.INTER_AREA)
 
         dot_mask = cv2.repeat(dot.astype(np.uint16), grid_size, grid_size)
@@ -386,7 +386,7 @@ class GameApp_PyGame(GameAppInterface):
         img_u8 = cv2.transpose(img_u8)
         img_u8 = cv2.resize(img_u8, dsize=(GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
 
-        img_u8 = ((dot_mask_u16 * img_u8.astype(np.uint16))//255).astype(np.uint8)
+        img_u8 = ((dot_mask_u16 * img_u8.astype(np.uint16)) // 255).astype(np.uint8)
 
         surface = pygame.surfarray.make_surface(img_u8)
         self.screen.blit(surface, (0, 0))
