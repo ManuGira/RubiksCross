@@ -6,6 +6,7 @@ import numpy as np
 import pygame
 import numpy.typing as npt
 import time
+import functools
 
 TILE_SIZE = 8
 TILES = [
@@ -235,7 +236,7 @@ class RubiksCross:
     def on_action(self, action: 'RubiksCross.Action'):
         if action == RubiksCross.Action.SCRAMBLE:
             ind = np.random.randint(0, 4, 1)[0]
-            for rn in np.random.randint(1, 4, 10*self.difficulty**2):
+            for rn in np.random.randint(1, 4, 10 * self.difficulty ** 2):
                 ind = (ind + 2 + rn) % 4  # avoid to take the opposit of previous move. (e.g. We don't want LEFT if it was RIGHT)
                 action = [RubiksCross.Action.LEFT, RubiksCross.Action.UP, RubiksCross.Action.RIGHT, RubiksCross.Action.DOWN][ind]
                 self.on_action(action)
@@ -291,6 +292,7 @@ class CV2(enum.IntEnum):
 
 
 class GameApp_cv2(GameAppInterface):
+    SIZE = 720
     FPS = 60
 
     def __init__(self, rubikscross: RubiksCross):
@@ -298,7 +300,7 @@ class GameApp_cv2(GameAppInterface):
         self.time = 0
 
     def set_image_u8(self, img_u8: npt.NDArray):
-        img_u8 = cv2.resize(img_u8, dsize=(720, 720), interpolation=cv2.INTER_NEAREST)
+        img_u8 = cv2.resize(img_u8, dsize=(GameApp_cv2.SIZE, GameApp_cv2.SIZE), interpolation=cv2.INTER_NEAREST)
         cv2.imshow("Rubik's Cross", img_u8)
 
     def run(self):
@@ -319,7 +321,7 @@ class GameApp_cv2(GameAppInterface):
         next_frame_time = time.time()
         event_key_list = []
         frame_duration = 1 / GameApp_cv2.FPS
-        while True: #self.win.is_alive:
+        while True:  # self.win.is_alive:
             now = time.time()
             sleep_time_ms = int((next_frame_time - now) * 1000)
             event_key = cv2.waitKeyEx(max(1, sleep_time_ms))
@@ -339,7 +341,6 @@ class GameApp_cv2(GameAppInterface):
             next_frame_time = max(time.time(), next_frame_time)
 
 
-
 class GameApp_PyGame(GameAppInterface):
     SIZE = 720
     FPS = 60
@@ -354,30 +355,41 @@ class GameApp_PyGame(GameAppInterface):
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont(None, 24)
 
+        self.dot_mask: npt.NDArray
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def make_dot_mask_u16(grid_size):
+        dot_size = GameApp_PyGame.SIZE // grid_size
+        rad = int(round(dot_size/2))
+
+        # working on bigger circle to get a nice blend
+        dot = np.zeros((dot_size*10, dot_size*10), dtype=np.uint8)
+        dot = cv2.circle(dot, (rad*10, rad*10), rad*10, (255,), thickness=-1)
+        dot = cv2.resize(dot, dsize=(dot_size, dot_size), interpolation=cv2.INTER_AREA)
+
+        dot_mask = cv2.repeat(dot.astype(np.uint16), grid_size, grid_size)
+
+        if dot_mask.shape[0] != GameApp_PyGame.SIZE:
+            dot_mask = cv2.resize(dot_mask, (GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_LINEAR)
+
+        dot_mask.shape += (1,)
+        return dot_mask
+
     def set_image_u8(self, img_u8: npt.NDArray):
         if img_u8.dtype != np.uint8:
             raise ValueError("Image type must be uint8")
 
         self.screen.fill((0, 0, 0))
 
-        grid_size_hw = img_u8.shape[:2]
-        dot_size = GameApp_PyGame.SIZE / max(grid_size_hw)
+        dot_mask_u16 = GameApp_PyGame.make_dot_mask_u16(img_u8.shape[0])
+        img_u8 = cv2.transpose(img_u8)
+        img_u8 = cv2.resize(img_u8, dsize=(GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
 
-        for i in range(img_u8.shape[0]):
-            for j in range(img_u8.shape[1]):
-                pixel_rgb = img_u8[i, j]
-                try:
-                    if sum(abs(pixel_rgb.flatten())) == 0:
-                        continue
-                except:
-                    print()
-                center_xy = (dot_size * (j + 0.5), dot_size * (i + 0.5))
-                pygame.draw.circle(
-                    self.screen,
-                    pixel_rgb,
-                    center_xy,
-                    dot_size / 2,
-                )
+        img_u8 = ((dot_mask_u16 * img_u8.astype(np.uint16))//255).astype(np.uint8)
+
+        surface = pygame.surfarray.make_surface(img_u8)
+        self.screen.blit(surface, (0, 0))
 
     def run(self):
         inputs_action_map = {
@@ -412,6 +424,7 @@ class GameApp_PyGame(GameAppInterface):
             pygame.display.flip()
             self.frame_timing = self.clock.tick(GameApp_PyGame.FPS)
 
+
 def main_game(difficulty: int = 2):
     assert difficulty < 11
     colors = np.array([
@@ -432,8 +445,8 @@ def main_game(difficulty: int = 2):
     cpgraphics = CroixPharamGraphics(tiles, animation_max_length=10)
     rubikscross = RubiksCross(cpgraphics, difficulty=difficulty)
 
-    # GameApp_PyGame(rubikscross).run()
-    GameApp_cv2(rubikscross).run()
+    GameApp_PyGame(rubikscross).run()
+    # GameApp_cv2(rubikscross).run()
 
 
 if __name__ == '__main__':
