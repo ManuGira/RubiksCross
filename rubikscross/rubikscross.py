@@ -79,12 +79,12 @@ class PyGameMixer(RubiksCrossMixerInterface):
     def __init__(self):
         pygame.init()
         self.sounds = {
-            RubiksCross.Action.UP: pygame.mixer.Sound(f"assets/1.wav"),
-            RubiksCross.Action.DOWN: pygame.mixer.Sound(f"assets/2.wav"),
-            RubiksCross.Action.LEFT: pygame.mixer.Sound(f"assets/3.wav"),
-            RubiksCross.Action.RIGHT: pygame.mixer.Sound(f"assets/4.wav"),
-            RubiksCross.Action.ROT_LEFT: pygame.mixer.Sound(f"assets/5.wav"),
-            RubiksCross.Action.ROT_RIGHT: pygame.mixer.Sound(f"assets/6.wav"),
+            RubiksCross.Action.UP: pygame.mixer.Sound(f"assets/Y1.mp3"),
+            RubiksCross.Action.DOWN: pygame.mixer.Sound(f"assets/Y0.mp3"),
+            RubiksCross.Action.LEFT: pygame.mixer.Sound(f"assets/X0.mp3"),
+            RubiksCross.Action.RIGHT: pygame.mixer.Sound(f"assets/X1.mp3"),
+            RubiksCross.Action.ROT_LEFT: pygame.mixer.Sound(f"assets/Z0.mp3"),
+            RubiksCross.Action.ROT_RIGHT: pygame.mixer.Sound(f"assets/Z1.mp3"),
         }
 
     def play_sound(self, action):
