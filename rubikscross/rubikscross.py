@@ -110,7 +110,7 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_next_frame(self) -> npt.NDArray:
+    def get_next_frame(self, height: int | None = None) -> npt.NDArray:
         pass
 
     @abc.abstractmethod
@@ -135,7 +135,8 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
 
         self.tile_size = self.tiles[0].shape[0]
         self.animation_max_length: int = animation_max_length
-        self.animation: list[npt.NDArray] = []
+        self.frame_config_list: list[tuple[Callable, npt.NDArray]] = []
+        self.frame_continuous_index: int = 0
         self.frame: npt.NDArray
         self.hint_frame: npt.NDArray
 
@@ -143,7 +144,7 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         self.frame = self.generate_frame(board)
 
     def initialize_hint_frame(self, initial_board):
-        self.hint_frame = self.generate_frame(initial_board)
+        self.hint_frame = self.generate_frame(initial_board.copy())
 
     @staticmethod
     def insert_tile(image, tile, coord_ij):
@@ -177,32 +178,44 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
                 CroixPharamGraphics.insert_tile(res, self.tiles[ind], (i, j))
         return res
 
-    def drop_frames(self, animation: list[npt.NDArray], target_length):
-        current_length = len(animation)
-        drop_count = current_length - target_length
-        for i in range(drop_count)[::-1]:
-            ind = (i * current_length) // drop_count
-            animation.pop(ind)
+    def update_animation(self, move_func: callable, board: npt.NDArray, frame_count: int | None = None):
+        self.frame_config_list.append((move_func, board.copy()))
 
-    def generate_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
-        frame_count = (self.animation_max_length // 1) if (frame_count is None) else frame_count
-        res = []
-        image0 = self.generate_frame(board)
-        factors = np.linspace(0, 1, frame_count + 1)[1:]
-        for factor in factors:
-            frame = move_func(image0, factor)
-            res.append(frame)
+    def get_next_frame(self, height: int | None = None) -> npt.NDArray:
+        fci_max = len(self.frame_config_list)
+        remaining_length = fci_max - self.frame_continuous_index
+
+        # update index and avoid out of bounds
+        min_step = 1 / 20
+        step = max(remaining_length / 5, min_step)
+        self.frame_continuous_index = min(self.frame_continuous_index + step, fci_max)
+
+        #  frame_continuous_index is N+t, where N is an integer and t a float in interval [0, 1[
+        N = int(self.frame_continuous_index)
+        t = self.frame_continuous_index % 1.0
+
+        if N == len(self.frame_config_list) and N > 0:
+            N -= 1
+            t += 1
+
+        # drop the N first configs
+        self.frame_config_list = self.frame_config_list[N:]
+        need_new_frame = self.frame_continuous_index > min_step / 2 and len(self.frame_config_list) > 0
+        if need_new_frame:
+            # generate the frame given its config
+            move_func, board = self.frame_config_list[0]
+            tiled_board = self.generate_frame(board)
+            self.frame = move_func(tiled_board, t)
+
+        res = self.frame
+        if height is not None:
+            # resize it to given height
+            h = res.shape[0]
+            f = height / h
+            res = cv2.resize(res, dsize=None, fx=f, fy=f, interpolation=cv2.INTER_NEAREST)
+
+        self.frame_continuous_index = t
         return res
-
-    def update_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
-        new_frames = self.generate_animation(move_func, board, frame_count)
-        self.animation += new_frames
-        self.drop_frames(self.animation, self.animation_max_length)
-
-    def get_next_frame(self) -> npt.NDArray:
-        if len(self.animation) > 0:
-            self.frame = self.animation.pop(0)
-        return self.frame
 
     def get_hint_frame(self) -> npt.NDArray:
         return self.hint_frame
@@ -435,7 +448,6 @@ class GameApp_cv2(GameAppInterface):
         self.time = 0
 
     def set_image_u8(self, img_u8: npt.NDArray):
-        img_u8 = cv2.resize(img_u8, dsize=(GameApp_cv2.SIZE, GameApp_cv2.SIZE), interpolation=cv2.INTER_NEAREST)
         cv2.imshow("Rubik's Cross", img_u8)
 
     def run(self):
@@ -470,7 +482,7 @@ class GameApp_cv2(GameAppInterface):
                 if event_key in inputs_action_map.keys():
                     self.rubikscross.on_action(inputs_action_map[event_key])
 
-            image = self.rubikscross.rcgraphics.get_next_frame()
+            image = self.rubikscross.rcgraphics.get_next_frame(GameApp_cv2.SIZE)
             self.set_image_u8(image)
             next_frame_time += frame_duration
             next_frame_time = max(time.time(), next_frame_time)
@@ -496,11 +508,13 @@ class GameApp_PyGame(GameAppInterface):
     @functools.lru_cache(maxsize=1)
     def make_dot_mask(grid_size):
         dot_size = GameApp_PyGame.SIZE // grid_size
-        rad = int(round(dot_size / 2))
+        magn = 10
+        center = int(round(magn * dot_size / 2))
+        rad = int(round(magn * dot_size / 2))
 
         # working on bigger circle to get a nice blend
-        dot = np.zeros((dot_size * 10, dot_size * 10), dtype=np.uint8)
-        dot = cv2.circle(dot, (rad * 10, rad * 10), rad * 10, (255,), thickness=-1)
+        dot = np.zeros((dot_size * magn, dot_size * magn), dtype=np.uint8)
+        dot = cv2.circle(dot, (center, center), rad, (255,), thickness=-1)
         dot = cv2.resize(dot, dsize=(dot_size, dot_size), interpolation=cv2.INTER_AREA)
 
         dot_mask = cv2.repeat(dot, grid_size, grid_size)
@@ -510,11 +524,30 @@ class GameApp_PyGame(GameAppInterface):
 
         return dot_mask
 
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def make_square_mask(grid_size):
+        square_size = GameApp_PyGame.SIZE // grid_size
+        rad_ratio = 0.8
+        topleft = int(round((1 - rad_ratio) * square_size / 2))
+        botright = int(round((1 + rad_ratio) * square_size / 2))
+
+        square = np.zeros((square_size, square_size), dtype=np.uint8)
+        square[topleft:botright, topleft:botright] = 255
+
+        square_mask = cv2.repeat(square, grid_size, grid_size)
+
+        if square_mask.shape[0] != GameApp_PyGame.SIZE:
+            square_mask = cv2.resize(square_mask, (GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
+
+        return square_mask
+
     def set_image_u8(self, img_u8: npt.NDArray):
         if img_u8.dtype != np.uint8:
             raise ValueError("Image type must be uint8")
 
-        dot_mask = GameApp_PyGame.make_dot_mask(img_u8.shape[0]).copy()
+        # dot_mask = GameApp_PyGame.make_dot_mask(img_u8.shape[0]).copy()
+        dot_mask = GameApp_PyGame.make_square_mask(img_u8.shape[0]).copy()
         img_u8 = cv2.transpose(img_u8)
         img_u8 = cv2.resize(img_u8, dsize=(GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
 
@@ -562,7 +595,7 @@ class GameApp_PyGame(GameAppInterface):
             hint_frame = cv2.resize(hint_frame, dsize=(GameApp_PyGame.SIZE // 5, GameApp_PyGame.SIZE // 5), interpolation=cv2.INTER_NEAREST)
             background_surface = pygame.surfarray.make_surface(hint_frame)
             self.screen.blit(background_surface, (
-                GameApp_PyGame.SIZE*11 // 15,
+                GameApp_PyGame.SIZE * 11 // 15,
                 GameApp_PyGame.SIZE // 15,
             ))
 
@@ -603,7 +636,7 @@ def main_game(difficulty: int = 2):
 
     # GameApp_cv2(
     #     RubiksCross(
-    #         CroixPharamGraphics(tiles, animation_max_length=10),
+    #         CroixPharamGraphics(TILES, colors, animation_max_length=10),
     #         SilentMixer(),
     #         difficulty=difficulty
     #     )).run()
