@@ -7,6 +7,7 @@ import pygame
 import numpy.typing as npt
 import time
 import functools
+import controller_pro
 
 TILE_SIZE = 8
 TILES = [
@@ -78,6 +79,8 @@ class SilentMixer(RubiksCrossMixerInterface):
 class PyGameMixer(RubiksCrossMixerInterface):
     def __init__(self):
         pygame.init()
+        pygame.joystick.init()
+        self.joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
         self.sounds = {
             RubiksCross.Action.UP: pygame.mixer.Sound(f"assets/Y1.mp3"),
             RubiksCross.Action.DOWN: pygame.mixer.Sound(f"assets/Y0.mp3"),
@@ -579,14 +582,33 @@ class GameApp_PyGame(GameAppInterface):
             pygame.K_F3: RubiksCross.Action.LOAD3,
         }
 
+        key_action_map.update({
+            controller_pro.SwitchProController.J_LEFT: RubiksCross.Action.LEFT,
+            controller_pro.SwitchProController.J_L: RubiksCross.Action.LEFT,
+            controller_pro.SwitchProController.J_RIGHT: RubiksCross.Action.RIGHT,
+            controller_pro.SwitchProController.J_R: RubiksCross.Action.RIGHT,
+            controller_pro.SwitchProController.J_UP: RubiksCross.Action.UP,
+            controller_pro.SwitchProController.J_ZL: RubiksCross.Action.UP,
+            controller_pro.SwitchProController.J_DOWN: RubiksCross.Action.DOWN,
+            controller_pro.SwitchProController.J_ZR: RubiksCross.Action.DOWN,
+            controller_pro.SwitchProController.J_A: RubiksCross.Action.ROT_RIGHT,
+            controller_pro.SwitchProController.J_B: RubiksCross.Action.ROT_LEFT,
+            controller_pro.SwitchProController.J_PLUS: RubiksCross.Action.SCRAMBLE,
+        })
+
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                elif event.type == pygame.KEYDOWN:
+                elif event.type in [pygame.KEYDOWN]:
                     if event.key in key_action_map.keys():
                         self.rubikscross.on_action(key_action_map[event.key])
+                elif event.type in [pygame.JOYAXISMOTION, pygame.JOYBUTTONDOWN]:
+                    controller_event = controller_pro.controller_pro_event(event)
+                    if controller_event in key_action_map.keys():
+                        self.rubikscross.on_action(key_action_map[controller_event])
+
 
             self.screen.fill((0, 0, 0))
 
