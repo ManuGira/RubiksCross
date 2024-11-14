@@ -109,7 +109,7 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def update_animation(self, move_func, board: npt.NDArray, frame_count: int | None = None):
+    def update_animation(self, action:"RubiksCross.Action", board: npt.NDArray, frame_count: int | None = None):
         pass
 
     @abc.abstractmethod
@@ -125,7 +125,7 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
 
-class CroixPharamGraphics(RubiksCrossGraphicsInterface):
+class CroixPharmaGraphics(RubiksCrossGraphicsInterface):
     def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, animation_max_length: int):
         self.colors = colors.copy()
 
@@ -142,6 +142,14 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         self.frame_continuous_index: int = 0
         self.frame: npt.NDArray
         self.hint_frame: npt.NDArray
+        self.move_func_map = {  # use lambda to hardcode shift value
+            RubiksCross.Action.UP: lambda board, factor: RubiksCross.cross_roll_up(board=board, shift=self.tile_size, factor=factor),
+            RubiksCross.Action.DOWN: lambda board, factor: RubiksCross.cross_roll_down(board=board, shift=self.tile_size, factor=factor),
+            RubiksCross.Action.LEFT: lambda board, factor: RubiksCross.cross_roll_left(board=board, shift=self.tile_size, factor=factor),
+            RubiksCross.Action.RIGHT: lambda board, factor: RubiksCross.cross_roll_right(board=board, shift=self.tile_size, factor=factor),
+            RubiksCross.Action.ROT_LEFT: lambda board, factor: RubiksCross.cross_rot90_left(board=board, factor=factor),
+            RubiksCross.Action.ROT_RIGHT: lambda board, factor: RubiksCross.cross_rot90_right(board=board, factor=factor),
+        }
 
     def initialize_frame(self, board):
         self.frame = self.generate_frame(board)
@@ -178,11 +186,11 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         for i in range(bsize):
             for j in range(bsize):
                 ind = int(board[i, j])
-                CroixPharamGraphics.insert_tile(res, self.tiles[ind], (i, j))
+                CroixPharmaGraphics.insert_tile(res, self.tiles[ind], (i, j))
         return res
 
-    def update_animation(self, move_func: callable, board: npt.NDArray, frame_count: int | None = None):
-        self.frame_config_list.append((move_func, board.copy()))
+    def update_animation(self, action: "RubiksCross.Action", board: npt.NDArray, frame_count: int | None = None):
+        self.frame_config_list.append((action, board.copy()))
 
     def get_next_frame(self, height: int | None = None) -> npt.NDArray:
         fci_max = len(self.frame_config_list)
@@ -206,9 +214,10 @@ class CroixPharamGraphics(RubiksCrossGraphicsInterface):
         need_new_frame = self.frame_continuous_index > min_step / 2 and len(self.frame_config_list) > 0
         if need_new_frame:
             # generate the frame given its config
-            move_func, board = self.frame_config_list[0]
+            action, board = self.frame_config_list[0]
+            move_func = self.move_func_map[action]
             tiled_board = self.generate_frame(board)
-            self.frame = move_func(tiled_board, t)
+            self.frame = move_func(board=tiled_board, factor=t)
 
         res = self.frame
         if height is not None:
@@ -380,16 +389,11 @@ class RubiksCross:
             self.load_board(slot_ind)
         else:
             move_func = self.action_func_map[action]
-            tile_size = self.rcgraphics.get_tile_size()
-
-            anim_move_func = move_func
-            if action in self.roll_actions:
-                anim_move_func = lambda b, f: move_func(board=b, shift=tile_size, factor=f)
 
             if not mute_sound:
                 self.rcmixer.play_sound(action)
 
-            self.rcgraphics.update_animation(anim_move_func, self.board, frame_count)
+            self.rcgraphics.update_animation(action, self.board, frame_count)
             self.board = move_func(self.board)
 
             match self.state:
@@ -651,14 +655,14 @@ def main_game(difficulty: int = 2):
 
     GameApp_PyGame(
         RubiksCross(
-            CroixPharamGraphics(TILES, colors, animation_max_length=10),
+            CroixPharmaGraphics(TILES, colors, animation_max_length=10),
             PyGameMixer(),
             difficulty=difficulty
         )).run()
 
     # GameApp_cv2(
     #     RubiksCross(
-    #         CroixPharamGraphics(TILES, colors, animation_max_length=10),
+    #         CroixPharmaGraphics(TILES, colors, animation_max_length=10),
     #         SilentMixer(),
     #         difficulty=difficulty
     #     )).run()
