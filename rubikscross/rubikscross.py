@@ -109,7 +109,7 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def update_animation(self, action:"RubiksCross.Action", board: npt.NDArray, frame_count: int | None = None):
+    def update_animation(self, action: "RubiksCross.Action", board: npt.NDArray, frame_count: int | None = None):
         pass
 
     @abc.abstractmethod
@@ -125,8 +125,41 @@ class RubiksCrossGraphicsInterface(metaclass=abc.ABCMeta):
         pass
 
 
+class GraphicsMoveFunctionsMap:
+    def __init__(self, tile_size):
+        self.tile_size = tile_size
+
+    def cross_roll_up(self, board, factor):
+        return RubiksCross.cross_roll_up(board=board, shift=self.tile_size, factor=factor)
+
+    def cross_roll_down(self, board, factor):
+        return RubiksCross.cross_roll_down(board=board, shift=self.tile_size, factor=factor)
+
+    def cross_roll_left(self, board, factor):
+        return RubiksCross.cross_roll_left(board=board, shift=self.tile_size, factor=factor)
+
+    def cross_roll_right(self, board, factor):
+        return RubiksCross.cross_roll_right(board=board, shift=self.tile_size, factor=factor)
+
+    def cross_rot90_left(self, board, factor):
+        return RubiksCross.cross_rot90_left(board=board, factor=factor)
+
+    def cross_rot90_right(self, board, factor):
+        return RubiksCross.cross_rot90_right(board=board, factor=factor)
+
+    def __getitem__(self, item):
+        return {
+            RubiksCross.Action.UP: self.cross_roll_up,
+            RubiksCross.Action.DOWN: self.cross_roll_down,
+            RubiksCross.Action.LEFT: self.cross_roll_left,
+            RubiksCross.Action.RIGHT: self.cross_roll_right,
+            RubiksCross.Action.ROT_LEFT: self.cross_rot90_left,
+            RubiksCross.Action.ROT_RIGHT: self.cross_rot90_right,
+        }[item]
+
+
 class CroixPharmaGraphics(RubiksCrossGraphicsInterface):
-    def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, animation_max_length: int):
+    def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, move_func_map: GraphicsMoveFunctionsMap, animation_max_length: int):
         self.colors = colors.copy()
 
         # colorize tiles
@@ -142,14 +175,7 @@ class CroixPharmaGraphics(RubiksCrossGraphicsInterface):
         self.frame_continuous_index: int = 0
         self.frame: npt.NDArray
         self.hint_frame: npt.NDArray
-        self.move_func_map = {  # use lambda to hardcode shift value
-            RubiksCross.Action.UP: lambda board, factor: RubiksCross.cross_roll_up(board=board, shift=self.tile_size, factor=factor),
-            RubiksCross.Action.DOWN: lambda board, factor: RubiksCross.cross_roll_down(board=board, shift=self.tile_size, factor=factor),
-            RubiksCross.Action.LEFT: lambda board, factor: RubiksCross.cross_roll_left(board=board, shift=self.tile_size, factor=factor),
-            RubiksCross.Action.RIGHT: lambda board, factor: RubiksCross.cross_roll_right(board=board, shift=self.tile_size, factor=factor),
-            RubiksCross.Action.ROT_LEFT: lambda board, factor: RubiksCross.cross_rot90_left(board=board, factor=factor),
-            RubiksCross.Action.ROT_RIGHT: lambda board, factor: RubiksCross.cross_rot90_right(board=board, factor=factor),
-        }
+        self.move_func_map = move_func_map
 
     def initialize_frame(self, board):
         self.frame = self.generate_frame(board)
@@ -613,7 +639,6 @@ class GameApp_PyGame(GameAppInterface):
                     if controller_event in key_action_map.keys():
                         self.rubikscross.on_action(key_action_map[controller_event])
 
-
             self.screen.fill((0, 0, 0))
 
             hint_frame = self.rubikscross.rcgraphics.get_hint_frame()
@@ -653,9 +678,15 @@ def main_game(difficulty: int = 2):
         [98, 113, 231],  # dark blue
     ], dtype=np.uint8)
 
+    tile_size = TILES[0].shape[0]
+
     GameApp_PyGame(
         RubiksCross(
-            CroixPharmaGraphics(TILES, colors, animation_max_length=10),
+            CroixPharmaGraphics(
+                TILES,
+                colors,
+                GraphicsMoveFunctionsMap(tile_size),
+                animation_max_length=10),
             PyGameMixer(),
             difficulty=difficulty
         )).run()
