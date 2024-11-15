@@ -57,7 +57,7 @@ def invert_map(xmap, ymap, diagnostics=False):
     Generate the inverse of deformation map defined by (xmap, ymap) using inverse bilinear interpolation.
     """
 
-    dtype=xmap.dtype
+    dtype = xmap.dtype
 
     # Generate quadrilaterals from mapped grid points.
     quads = np.array([[ymap[:-1, :-1], xmap[:-1, :-1]],
@@ -131,3 +131,51 @@ def invert_map(xmap, ymap, diagnostics=False):
         return xmap1, ymap1, diag
     else:
         return xmap1, ymap1
+
+
+def main():
+    import cv2
+    from scipy import ndimage as ndi
+    import time
+
+    print("Generate deformation field map")
+    N = 500
+    sh = (N, N)
+    t = np.random.normal(size=sh)
+    dx = ndi.gaussian_filter(t, 40, order=(0, 1))
+    dy = ndi.gaussian_filter(t, 40, order=(1, 0))
+    dx *= 30 / dx.max()
+    dy *= 30 / dy.max()
+    yy, xx = np.indices(sh)
+    xmap = (xx - dx).astype(np.float32)
+    ymap = (yy - dy).astype(np.float32)
+
+    print("Generate Test image")
+    img = np.zeros(sh)
+    img[::10, :] = 1
+    img[:, ::10] = 1
+    img = ndi.gaussian_filter(img, 0.5)
+
+    print("Apply forward mapping")
+    warped = cv2.remap(img, xmap, ymap, cv2.INTER_LINEAR)
+    cv2.imshow("warped", warped)
+    cv2.waitKeyEx(1)
+
+    print("warmp up")
+    t0 = time.time()
+    xmap_warmup = xmap[::N // 3, ::N // 3]
+    ymap_warmup = ymap[::N // 3, ::N // 3]
+    invert_map(xmap_warmup, ymap_warmup)
+    print(f"Warmup time ({xmap_warmup.shape}, {xmap_warmup.dtype}): {time.time() - t0:.3f} s")
+
+    print("Invert mapping...")
+    t0 = time.time()
+    xmap1, ymap1 = invert_map(xmap, ymap)
+    print(f"Computation time: {time.time() - t0:.3f} s")
+    unwarped = cv2.remap(warped, xmap1, ymap1, cv2.INTER_LINEAR)
+    cv2.imshow("unwarped", unwarped)
+    cv2.waitKeyEx(0)
+
+
+if __name__ == '__main__':
+    main()
