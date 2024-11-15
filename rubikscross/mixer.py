@@ -1,3 +1,5 @@
+import os
+
 import pygame
 
 from actions import Action
@@ -14,13 +16,15 @@ class PyGameMixer(MixerInterface):
         pygame.init()
         pygame.joystick.init()
         self.joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+
+        dirname = os.path.dirname(__file__)
         self.sounds = {
-            Action.UP: pygame.mixer.Sound(f"assets/Y1.mp3"),
-            Action.DOWN: pygame.mixer.Sound(f"assets/Y0.mp3"),
-            Action.LEFT: pygame.mixer.Sound(f"assets/X0.mp3"),
-            Action.RIGHT: pygame.mixer.Sound(f"assets/X1.mp3"),
-            Action.ROT_LEFT: pygame.mixer.Sound(f"assets/Z0.mp3"),
-            Action.ROT_RIGHT: pygame.mixer.Sound(f"assets/Z1.mp3"),
+            Action.UP: pygame.mixer.Sound(os.path.join(dirname, "assets/Y1.mp3")),
+            Action.DOWN: pygame.mixer.Sound(os.path.join(dirname, "assets/Y0.mp3")),
+            Action.LEFT: pygame.mixer.Sound(os.path.join(dirname, "assets/X0.mp3")),
+            Action.RIGHT: pygame.mixer.Sound(os.path.join(dirname, "assets/X1.mp3")),
+            Action.ROT_LEFT: pygame.mixer.Sound(os.path.join(dirname, "assets/Z0.mp3")),
+            Action.ROT_RIGHT: pygame.mixer.Sound(os.path.join(dirname, "assets/Z1.mp3")),
         }
 
     def play_sound(self, action):
