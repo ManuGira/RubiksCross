@@ -2,7 +2,7 @@ import numpy as np
 
 from game_app import GameApp_PyGame, GameApp_cv2
 from graphics import SimpleGraphics
-from graphics_move_functions_map import RollFuncMap, DemoFuncMap
+from graphics_move_functions_map import RollFuncMap, FadeFuncMap
 from mixer import PyGameMixer, SilentMixer
 from rubikscross import RubiksCross
 
@@ -89,7 +89,7 @@ def main():
             SimpleGraphics(
                 TILES,
                 colors,
-                DemoFuncMap(tile_size),
+                FadeFuncMap(tile_size),
                 animation_max_length=10),
             PyGameMixer(),
             difficulty=args.difficulty
