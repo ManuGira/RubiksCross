@@ -29,60 +29,8 @@ class MixerInterface(metaclass=abc.ABCMeta):
         pass
 
 
-class GraphicsMoveFunctionsMapInterface(metaclass=abc.ABCMeta):
+class GraphicPainterInterface(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def cross_rot90_right(self, board, factor: float = 1.0):
+    def compute(self, action: Action, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0) -> tuple[npt.NDArray, npt.NDArray]:
         pass
 
-    @abc.abstractmethod
-    def cross_rot90_left(self, board, factor: float = 1.0):
-        pass
-
-    @abc.abstractmethod
-    def cross_roll_right(self, board: npt.NDArray, factor: float = 1.0):
-        pass
-
-    @abc.abstractmethod
-    def cross_roll_left(self, board: npt.NDArray, factor: float = 1.0):
-        pass
-
-    @abc.abstractmethod
-    def cross_roll_up(self, board: npt.NDArray, factor: float = 1.0):
-        pass
-
-    @abc.abstractmethod
-    def cross_roll_down(self, board: npt.NDArray, factor: float = 1.0):
-        pass
-
-    @abc.abstractmethod
-    def __getitem__(self, action: Action):
-        pass
-
-class GraphicsInterface(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def initialize_frame(self, board: npt.NDArray):
-        pass
-
-    @abc.abstractmethod
-    def initialize_hint_frame(self, board: npt.NDArray):
-        pass
-
-    @abc.abstractmethod
-    def generate_frame(self, board: npt.NDArray) -> npt.NDArray:
-        pass
-
-    @abc.abstractmethod
-    def update_animation(self, action: Action, board: npt.NDArray, frame_count: int | None = None):
-        pass
-
-    @abc.abstractmethod
-    def get_next_frame(self, height: int | None = None) -> npt.NDArray:
-        pass
-
-    @abc.abstractmethod
-    def get_hint_frame(self) -> npt.NDArray:
-        pass
-
-    @abc.abstractmethod
-    def get_tile_size(self) -> int:
-        pass

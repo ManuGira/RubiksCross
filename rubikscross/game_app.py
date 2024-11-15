@@ -82,7 +82,7 @@ class GameApp_cv2(GameAppInterface):
 
 class GameApp_PyGame(GameAppInterface):
     SIZE = 720
-    FPS = 60
+    FPS = 999
 
     def __init__(self, rubikscross: RubiksCross):
         self.rubikscross = rubikscross
@@ -114,6 +114,12 @@ class GameApp_PyGame(GameAppInterface):
         if dot_mask.shape[0] != GameApp_PyGame.SIZE:
             dot_mask = cv2.resize(dot_mask, (GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_LINEAR)
 
+        ps = GameApp_PyGame.SIZE//3
+        dot_mask[:ps, :ps] = 0
+        dot_mask[-ps:, :ps] = 0
+        dot_mask[-ps:, -ps:] = 0
+        dot_mask[:ps, -ps:] = 0
+
         return dot_mask
 
     @staticmethod
@@ -132,22 +138,26 @@ class GameApp_PyGame(GameAppInterface):
         if square_mask.shape[0] != GameApp_PyGame.SIZE:
             square_mask = cv2.resize(square_mask, (GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
 
+        ps = GameApp_PyGame.SIZE//3
+        square_mask[:ps, :ps] = 0
+        square_mask[-ps:, :ps] = 0
+        square_mask[-ps:, -ps:] = 0
+        square_mask[:ps, -ps:] = 0
+
         return square_mask
 
-    def set_image_u8(self, img_u8: npt.NDArray):
+    def set_image_u8(self, img_u8: npt.NDArray, alpha=None):
         if img_u8.dtype != np.uint8:
             raise ValueError("Image type must be uint8")
 
-        # dot_mask = GameApp_PyGame.make_dot_mask(img_u8.shape[0]).copy()
-        dot_mask = GameApp_PyGame.make_square_mask(img_u8.shape[0]).copy()
         img_u8 = cv2.transpose(img_u8)
         img_u8 = cv2.resize(img_u8, dsize=(GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_NEAREST)
-
-        dot_mask *= (cv2.cvtColor(img_u8, cv2.COLOR_RGB2GRAY) != 0).astype(np.uint8)
+        alpha = cv2.transpose(alpha)
+        alpha = cv2.resize(alpha, dsize=(GameApp_PyGame.SIZE, GameApp_PyGame.SIZE), interpolation=cv2.INTER_LINEAR)
 
         surface = pygame.surfarray.make_surface(img_u8)
         surface = surface.convert_alpha()  # Enable per-pixel alpha
-        pygame.surfarray.pixels_alpha(surface)[:, :] = dot_mask
+        pygame.surfarray.pixels_alpha(surface)[:, :] = alpha
         self.screen.blit(surface, (0, 0))
 
     def run(self):
@@ -209,8 +219,8 @@ class GameApp_PyGame(GameAppInterface):
                 GameApp_PyGame.SIZE // 15,
             ))
 
-            image = self.rubikscross.rcgraphics.get_next_frame()
-            self.set_image_u8(image)
+            image, alpha = self.rubikscross.rcgraphics.get_next_frame()
+            self.set_image_u8(image, alpha)
 
             current_fps = self.clock.get_fps()
             fps_img = self.font.render(f"FPS: {current_fps:.1f}", True, (0, 100, 0))

@@ -7,7 +7,8 @@ import numpy.typing as npt
 
 import actions
 from actions import Action
-from interfaces import GraphicsInterface, MixerInterface
+from interfaces import MixerInterface
+from graphics import Graphics
 
 
 class RubiksCross:
@@ -58,12 +59,12 @@ class RubiksCross:
     def cross_roll_down(board: npt.NDArray, shift: int = 1, factor: float = 1.0):
         return RubiksCross.cross_roll_right(board.swapaxes(0, 1), shift, factor).swapaxes(0, 1)
 
-    def __init__(self, rcgraphics: GraphicsInterface, rcmixer: MixerInterface, difficulty: int = 2):
+    def __init__(self, rcgraphics: Graphics, rcmixer: MixerInterface, difficulty: int = 2):
         self.rcgraphics: GraphicsInterface = rcgraphics
         self.rcmixer: MixerInterface = rcmixer
         self.difficulty = difficulty
+        self.grid_size = 3 * difficulty
         self.state = RubiksCross.State.FREE
-
         self.action_func_map = {
             Action.RIGHT: RubiksCross.cross_roll_right,
             Action.LEFT: RubiksCross.cross_roll_left,
