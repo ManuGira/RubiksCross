@@ -1,6 +1,6 @@
 import enum
-import enum
 import functools
+import time
 
 import cv2
 import numpy as np

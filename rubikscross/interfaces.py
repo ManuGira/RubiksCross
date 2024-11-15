@@ -29,6 +29,35 @@ class MixerInterface(metaclass=abc.ABCMeta):
         pass
 
 
+class GraphicsMoveFunctionsMapInterface(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def cross_rot90_right(self, board, factor: float = 1.0):
+        pass
+
+    @abc.abstractmethod
+    def cross_rot90_left(self, board, factor: float = 1.0):
+        pass
+
+    @abc.abstractmethod
+    def cross_roll_right(self, board: npt.NDArray, factor: float = 1.0):
+        pass
+
+    @abc.abstractmethod
+    def cross_roll_left(self, board: npt.NDArray, factor: float = 1.0):
+        pass
+
+    @abc.abstractmethod
+    def cross_roll_up(self, board: npt.NDArray, factor: float = 1.0):
+        pass
+
+    @abc.abstractmethod
+    def cross_roll_down(self, board: npt.NDArray, factor: float = 1.0):
+        pass
+
+    @abc.abstractmethod
+    def __getitem__(self, action: Action):
+        pass
+
 class GraphicsInterface(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def initialize_frame(self, board: npt.NDArray):

@@ -1,9 +1,9 @@
 import numpy as np
 
-from game_app import GameApp_PyGame
-from graphics import CroixPharmaGraphics
-from graphics_move_functions_map import GraphicsMoveFunctionsMap
-from mixer import PyGameMixer
+from game_app import GameApp_PyGame, GameApp_cv2
+from graphics import SimpleGraphics
+from graphics_move_functions_map import RollFuncMap, DemoFuncMap
+from mixer import PyGameMixer, SilentMixer
 from rubikscross import RubiksCross
 
 TILE_SIZE = 8
@@ -86,10 +86,10 @@ def main():
 
     GameApp_PyGame(
         RubiksCross(
-            CroixPharmaGraphics(
+            SimpleGraphics(
                 TILES,
                 colors,
-                GraphicsMoveFunctionsMap(tile_size),
+                DemoFuncMap(tile_size),
                 animation_max_length=10),
             PyGameMixer(),
             difficulty=args.difficulty
@@ -97,9 +97,13 @@ def main():
 
     # GameApp_cv2(
     #     RubiksCross(
-    #         CroixPharmaGraphics(TILES, colors, animation_max_length=10),
+    #         SimpleGraphics(
+    #             TILES,
+    #             colors,
+    #             RollFuncMap(tile_size),
+    #             animation_max_length=10),
     #         SilentMixer(),
-    #         difficulty=difficulty
+    #         difficulty=args.difficulty
     #     )).run()
 
 

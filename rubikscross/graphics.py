@@ -1,13 +1,13 @@
+import cv2
 import numpy as np
 import numpy.typing as npt
 
 from actions import Action
-from graphics_move_functions_map import GraphicsMoveFunctionsMap
-from interfaces import GraphicsInterface
+from interfaces import GraphicsInterface, GraphicsMoveFunctionsMapInterface
 
 
-class CroixPharmaGraphics(GraphicsInterface):
-    def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, move_func_map: GraphicsMoveFunctionsMap, animation_max_length: int):
+class SimpleGraphics(GraphicsInterface):
+    def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, move_func_map: GraphicsMoveFunctionsMapInterface, animation_max_length: int):
         self.colors = colors.copy()
 
         # colorize tiles
@@ -60,7 +60,7 @@ class CroixPharmaGraphics(GraphicsInterface):
         for i in range(bsize):
             for j in range(bsize):
                 ind = int(board[i, j])
-                CroixPharmaGraphics.insert_tile(res, self.tiles[ind], (i, j))
+                SimpleGraphics.insert_tile(res, self.tiles[ind], (i, j))
         return res
 
     def update_animation(self, action: Action, board: npt.NDArray, frame_count: int | None = None):
