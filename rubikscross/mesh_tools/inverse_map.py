@@ -1,9 +1,7 @@
 import numpy as np
-import numba
 
 
 # https://stackoverflow.com/a/65566295
-@numba.jit(nopython=True)
 def bilinear_inverse(p, vertices, numiter=4):
     """
     Compute the inverse of the bilinear map from the unit square
@@ -56,45 +54,6 @@ def bilinear_inverse(p, vertices, numiter=4):
     return s
 
 
-
-@numba.njit()
-def in_quad_check(s):
-    """
-    numba equivalent of
-    np.all((s > -epsilon) * (s < (1 + epsilon)), axis=0)
-    Parameters
-    ----------
-    s: (h, w)
-
-    Returns
-    -------
-    (w,)
-    """
-
-    # Smallish number to avoid missing point lying on edges
-    epsilon = 0.01
-    h, w = s.shape
-    result = np.full((w,), True, dtype=np.bool_)
-    for j in range(w):
-        for i in range(h):
-            result[j] *= (s[i, j] > -epsilon) * (s[i, j] < (1 + epsilon))
-    return result
-
-
-@numba.jit(nopython=True)
-def filter_quads(quads, valid):
-    # Get the indices where valid is True
-    # Initialize an empty list to store the valid elements
-    count = np.sum(valid)
-    h, w = quads.shape[:2]
-    results = np.empty((h, w, count), dtype=quads.dtype)
-    valid_indices = np.where(valid)
-    for k, idx in enumerate(zip(*valid_indices)):
-        results[:, :, k] = quads[:, :, idx[0], idx[1]]
-    return results
-
-
-# @numba.jit(nopython=True)
 def quad_loops(i0, j0, quads, x0, x0_offset, x1, xN, y0, y0_offset, y1, yN):
     map_type = quads.dtype
 
@@ -113,58 +72,25 @@ def quad_loops(i0, j0, quads, x0, x0_offset, x1, xN, y0, y0_offset, y1, yN):
             valid = (xN > ix) * (yN > iy)
 
             # Local points to check
-            # <<<<<<<<<<<<<<<<
             p = np.array([y0[valid] + ix, x0[valid] + iy])
-            # ----------------
-            # NUMBA JIT
-            # yvalid = np.array([y0.ravel()[i] + iy for i, val in enumerate(valid.ravel()) if val], dtype=np.int32)
-            # xvalid = np.array([x0.ravel()[i] + ix for i, val in enumerate(valid.ravel()) if val], dtype=np.int32)
-            # p = np.stack((yvalid, xvalid))
-            # >>>>>>>>>>>>>>>>
 
             # Map the position of the point in the quad
-            # <<<<<<<<<<<<<<
             valid_quads = quads[:, :, valid]
-            # --------------
-            # NUMBA JIT
-            # valid_quads = filter_quads(quads, valid)
-            # >>>>>>>>>>>>>>
 
             s = bilinear_inverse(p, valid_quads)
 
             # s out of unit square means p out of quad
             # Keep some epsilon around to avoid missing edges
-            # <<<<<<<<<<<<<<
-            # in_quad = np.all((s > -epsilon) * (s < (1 + epsilon)), axis=0)
-            # --------------
-            # NUMBA JIT
-            in_quad = in_quad_check(s)
-            # >>>>>>>>>>>>
-
+            in_quad = np.all((s > -epsilon) * (s < (1 + epsilon)), axis=0)
 
             # Add found indices
             ii = p[0, in_quad] - y0_offset
             jj = p[1, in_quad] - x0_offset
-            # <<<<<<<<<<<<<<
             ymap1[ii, jj] += i0[valid][in_quad] + s[0][in_quad]
             xmap1[ii, jj] += j0[valid][in_quad] + s[1][in_quad]
             # Increment count
             TN[ii, jj] += 1
-            # --------------
-            # NUMBA JIT
-            # i0_valid = np.array([i0.ravel()[k] for k, val in enumerate(valid.ravel()) if val], dtype=np.int32)
-            # j0_valid = np.array([j0.ravel()[k] for k, val in enumerate(valid.ravel()) if val], dtype=np.int32)
-            # for k in range(len(in_quad)):
-            #     is_good = in_quad[k]
-            #     val_i = (i0_valid[k]+s[0, k])*is_good
-            #     val_j = (j0_valid[k]+s[1, k])*is_good
-            #     for i in ii:
-            #         for j in jj:
-            #             ymap1[i, j] += val_i
-            #             xmap1[i, j] += val_j
-            #             # Increment count
-            #             TN[i, j] += 1
-            # >>>>>>>>>>>>
+
     ymap1 /= TN + (TN == 0)
     xmap1 /= TN + (TN == 0)
     return TN, xmap1, ymap1
@@ -200,7 +126,6 @@ def invert_map(xmap, ymap, diagnostics=False):
     # Index range in x and y (per quad)
     xN = x1 - x0 + 1
     yN = y1 - y0 + 1
-
 
     TN, xmap1, ymap1 = quad_loops(i0, j0, quads, x0, x0_offset, x1, xN, y0, y0_offset, y1, yN)
 
