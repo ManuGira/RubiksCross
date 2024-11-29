@@ -1,3 +1,5 @@
 ﻿.idea
 *.wav
 rubikscross/__pycache__
+__pycache__
+*.pickle
