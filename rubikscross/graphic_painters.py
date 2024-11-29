@@ -4,9 +4,9 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
-from actions import Action
-from interfaces import GraphicPainterInterface
-from rubikscross import RubiksCross
+from .actions import Action
+from .interfaces import GraphicPainterInterface
+from .rubikscross import RubiksCross
 
 
 @functools.lru_cache(maxsize=1)

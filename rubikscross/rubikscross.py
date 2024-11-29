@@ -5,10 +5,10 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
-import actions
-from actions import Action
-from interfaces import MixerInterface
-from graphics import Graphics
+from . import actions
+from .actions import Action
+from .interfaces import MixerInterface
+from .graphics import Graphics
 
 
 class RubiksCross:

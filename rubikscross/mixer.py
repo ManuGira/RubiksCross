@@ -2,8 +2,8 @@ import os
 
 import pygame
 
-from actions import Action
-from interfaces import MixerInterface
+from .actions import Action
+from .interfaces import MixerInterface
 
 
 class SilentMixer(MixerInterface):

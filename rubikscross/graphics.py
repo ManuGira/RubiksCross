@@ -2,29 +2,24 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
-from actions import Action
-from interfaces import GraphicPainterInterface
+from .actions import Action
+from .tiles import t_tilesbook
+from .interfaces import GraphicPainterInterface
 
 
 class Graphics:
-    def __init__(self, tiles: list[npt.NDArray], colors: npt.NDArray, move_func_map: GraphicPainterInterface, animation_max_length: int):
-        self.colors = colors.copy()
-
+    def __init__(self, tiles: t_tilesbook, move_func_map: GraphicPainterInterface, animation_max_length: int):
         # colorize tiles
-        self.tiles = []
-        for tile, color in zip(tiles, colors):
-            tile = tile.reshape((*tile.shape, 1))
-            color = color.reshape((1, 1, 3))
-            self.tiles.append((1 - tile) * color)
-
-        self.tile_size = self.tiles[0].shape[0]
+        self.tiles: t_tilesbook = tiles
+        self.move_func_map = move_func_map
         self.animation_max_length: int = animation_max_length
+
+        self.tile_size: int = self.tiles[0].shape[0]
         self.frame_config_list: list[tuple[Callable, npt.NDArray]] = []
         self.frame_continuous_index: int = 0
         self.frame: npt.NDArray
         self.alpha: npt.NDArray
         self.hint_frame: npt.NDArray
-        self.move_func_map = move_func_map
 
     def initialize_frame(self, board):
         self.frame, self.alpha = self.move_func_map.compute(Action.RIGHT, board, self.tiles, factor=0)

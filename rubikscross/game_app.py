@@ -7,10 +7,10 @@ import numpy as np
 import numpy.typing as npt
 import pygame
 
-import controller_pro
-from actions import Action
-from interfaces import GameAppInterface
-from rubikscross import RubiksCross
+from . import controller_pro
+from .actions import Action
+from .interfaces import GameAppInterface
+from .rubikscross import RubiksCross
 
 
 class CV2(enum.IntEnum):

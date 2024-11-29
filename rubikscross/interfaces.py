@@ -2,7 +2,7 @@ import abc
 
 import numpy.typing as npt
 
-from actions import Action
+from .actions import Action
 
 
 class GameAppInterface(metaclass=abc.ABCMeta):
@@ -33,4 +33,3 @@ class GraphicPainterInterface(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def compute(self, action: Action, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0) -> tuple[npt.NDArray, npt.NDArray]:
         pass
-
