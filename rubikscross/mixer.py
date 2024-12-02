@@ -19,12 +19,12 @@ class PyGameMixer(MixerInterface):
 
         dirname = os.path.dirname(__file__)
         self.sounds = {
-            Action.UP: pygame.mixer.Sound(os.path.join(dirname, "assets/Y1.mp3")),
-            Action.DOWN: pygame.mixer.Sound(os.path.join(dirname, "assets/Y0.mp3")),
-            Action.LEFT: pygame.mixer.Sound(os.path.join(dirname, "assets/X0.mp3")),
-            Action.RIGHT: pygame.mixer.Sound(os.path.join(dirname, "assets/X1.mp3")),
-            Action.ROT_LEFT: pygame.mixer.Sound(os.path.join(dirname, "assets/Z0.mp3")),
-            Action.ROT_RIGHT: pygame.mixer.Sound(os.path.join(dirname, "assets/Z1.mp3")),
+            Action.UP: pygame.mixer.Sound(os.path.join(dirname, "assets/Y1.mp3.py")),
+            Action.DOWN: pygame.mixer.Sound(os.path.join(dirname, "assets/Y0.mp3.py")),
+            Action.LEFT: pygame.mixer.Sound(os.path.join(dirname, "assets/X0.mp3.py")),
+            Action.RIGHT: pygame.mixer.Sound(os.path.join(dirname, "assets/X1.mp3.py")),
+            Action.ROT_LEFT: pygame.mixer.Sound(os.path.join(dirname, "assets/Z0.mp3.py")),
+            Action.ROT_RIGHT: pygame.mixer.Sound(os.path.join(dirname, "assets/Z1.mp3.py")),
         }
 
     def play_sound(self, action):
