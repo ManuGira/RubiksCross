@@ -71,7 +71,7 @@ class Roll3DFuncMap(GraphicPainterInterface):
     def __init__(self, tiles, dst_size, difficulty):
         self.tile_size = tiles[0].shape[0]
         self.dst_size = dst_size
-        board_size = difficulty*3
+        board_size = difficulty * 3
 
         # todo: precompute
         big_tiles_size = self.dst_size // board_size
@@ -80,6 +80,8 @@ class Roll3DFuncMap(GraphicPainterInterface):
         border_mask = np.zeros((big_tiles_size, big_tiles_size, 3), dtype=np.uint8)
         border_mask[border:-border, border:-border] = 1
         self.big_tiles = [cv2.resize(tile, dsize=(big_tiles_size, big_tiles_size), interpolation=cv2.INTER_NEAREST) * border_mask for tile in tiles]
+        self.big_tiles = [tile * border_mask for tile in self.big_tiles]
+
 
     @staticmethod
     def insert_subimg(img, subimg, coord_yx):
@@ -116,11 +118,28 @@ class Roll3DFuncMap(GraphicPainterInterface):
     @classmethod
     def draw_roll_out_tiles(cls, img, big_tiles, rolling_tiles_list, factor):
 
-        def rot3d(quad_xy, factor):
+        def zoom_out(quad_xy, factor):
             quad_xy = quad_xy.copy()
             quad_xy = (quad_xy - 0.5) * (1 - factor) + 0.5 + np.array([0.5, 0]) * factor
-            # quad_xy[:2, 0] += factor
-            # quad_out_xy[1:3, 1] = (quad_out_xy[1:3, 1]-0.5)*(1-factor*0.5) + 0.5
+            return quad_xy
+
+        def rot3d(quad_xy, factor):
+            quad_xy = quad_xy.copy()
+            theta = np.pi * factor
+            cos = np.cos(theta)
+            sin = np.sin(theta)
+
+            # center
+            quad_xy -= 0.5
+
+            quad_xy[:, 0] *= cos
+            # quad_xy[2:4, 1] *= (cos*0.5+0.5)
+
+            # uncenter
+            quad_xy += 0.5
+
+            # slide x
+            quad_xy[:, 0] += 0.5 * factor
             return quad_xy
 
         tiles_size = big_tiles[0].shape[0]
@@ -155,16 +174,16 @@ class Roll3DFuncMap(GraphicPainterInterface):
                 i_out, j_out = rolling_tile.coord_ij_out
                 y_out = int(round(i_out * img_size / board_size))
                 x_out = int(round(j_out * img_size / board_size))
-                alpha = max(0, (1-factor) * 2 - 1)
-                tile_out = cv2.warpPerspective(tile, hmat_out, dsize=(tiles_size, tiles_size))*alpha
+                alpha = max(0, (1 - factor) * 2 - 1)
+                tile_out = cv2.warpPerspective(tile, hmat_out, dsize=(tiles_size, tiles_size)) * alpha
                 cls.insert_subimg(img, tile_out, (y_out, x_out))
 
             if hmat_in is not None:
                 i_in, j_in = rolling_tile.coord_ij_in
                 y_in = int(round(i_in * img_size / board_size))
                 x_in = int(round(j_in * img_size / board_size))
-                alpha = max(0, factor*2-1)
-                tile_in = cv2.warpPerspective(tile, hmat_in, dsize=(tiles_size, tiles_size))*alpha
+                alpha = max(0, factor * 2 - 1)
+                tile_in = cv2.warpPerspective(tile, hmat_in, dsize=(tiles_size, tiles_size)) * alpha
                 cls.insert_subimg(img, tile_in.astype(np.uint8), (y_in, x_in))
 
     @classmethod
@@ -238,7 +257,7 @@ class Roll3DFuncMap(GraphicPainterInterface):
         board = self.cross_roll_right(board, factor)
         return cv2.rotate(board, cv2.ROTATE_90_CLOCKWISE)
 
-    def cross_rot90_right(self, board, factor:float=1.0):
+    def cross_rot90_right(self, board, factor: float = 1.0):
         h, w = board.shape[:2]
         assert h % 3 == 0
         assert h == w
@@ -262,13 +281,6 @@ class Roll3DFuncMap(GraphicPainterInterface):
         }
 
         img_u8 = move_funcs[action](board, factor)
-
-        # cv2.imshow("img_u8", img_u8)
-        # cv2.waitKeyEx(0)
-
-        # alpha = make_square_mask(img_u8.shape[0], self.dst_size).copy()
-        # img_u8 = cv2.resize(img_u8, dsize=(self.dst_size, self.dst_size), interpolation=cv2.INTER_NEAREST)
-
         alpha = (cv2.cvtColor(img_u8, cv2.COLOR_RGB2GRAY) != 0).astype(np.uint8) * 255
         return img_u8, alpha
 
