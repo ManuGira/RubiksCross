@@ -8,6 +8,7 @@ class Action(enum.Enum):
     DOWN = enum.auto()
     ROT_LEFT = enum.auto()
     ROT_RIGHT = enum.auto()
+    IDLE = enum.auto()
     SCRAMBLE = enum.auto()
     SAVE1 = enum.auto()
     SAVE2 = enum.auto()

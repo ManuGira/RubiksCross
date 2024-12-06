@@ -73,7 +73,6 @@ class Roll3DFuncMap(GraphicPainterInterface):
         self.dst_size = dst_size
         board_size = difficulty * 3
 
-        # todo: precompute
         big_tiles_size = self.dst_size // board_size
         tile_size = tiles[0].shape[0]
         border = int(round(big_tiles_size * 0.5 / tile_size))
@@ -270,6 +269,15 @@ class Roll3DFuncMap(GraphicPainterInterface):
     def cross_rot90_left(self, board, factor: float = 1.0):
         return self.cross_rot90_right(board, -factor)
 
+    def idle(self, board, factor: float = 1.0):
+        h, w = board.shape[:2]
+        assert h % 3 == 0
+        assert h == w
+
+        img = np.zeros((self.dst_size, self.dst_size, 3), dtype=np.uint8)
+        self.draw_sliding_tiles(img, self.big_tiles, board, 0)
+        return img
+
     def compute(self, action: Action, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0) -> tuple[npt.NDArray, npt.NDArray]:
         move_funcs = {
             Action.UP: self.cross_roll_up,
@@ -278,6 +286,7 @@ class Roll3DFuncMap(GraphicPainterInterface):
             Action.RIGHT: self.cross_roll_right,
             Action.ROT_LEFT: self.cross_rot90_left,
             Action.ROT_RIGHT: self.cross_rot90_right,
+            Action.IDLE: self.idle,
         }
 
         img_u8 = move_funcs[action](board, factor)

@@ -103,7 +103,7 @@ class RubiksCross:
     def load_board(self, slot_id):
         self.state = RubiksCross.State.FREE
         self.board = self.saved_boards[slot_id].copy()
-        self.rcgraphics.generate_frame(self.board)
+        self.rcgraphics.reset_frame_config(self.board)
 
     def update_chrono(self):
         if self.state == RubiksCross.State.RACING:
