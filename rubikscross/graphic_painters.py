@@ -113,12 +113,6 @@ class Roll3DFuncMap(GraphicPainterInterface):
 
         img[y0:y1, x0:x1] = subimg[i0:i1, j0:j1]
 
-    def cross_rot90_right(self, board, factor:float=1.0):
-        return RubiksCross.cross_rot90_right(board, factor)
-
-    def cross_rot90_left(self, board, factor: float = 1.0):
-        return RubiksCross.cross_rot90_left(board, factor)
-
     @classmethod
     def draw_roll_out_tiles(cls, img, big_tiles, rolling_tiles_list, factor):
 
@@ -243,6 +237,19 @@ class Roll3DFuncMap(GraphicPainterInterface):
         board = cv2.rotate(board, cv2.ROTATE_90_COUNTERCLOCKWISE)
         board = self.cross_roll_right(board, factor)
         return cv2.rotate(board, cv2.ROTATE_90_CLOCKWISE)
+
+    def cross_rot90_right(self, board, factor:float=1.0):
+        h, w = board.shape[:2]
+        assert h % 3 == 0
+        assert h == w
+
+        img = np.zeros((self.dst_size, self.dst_size, 3), dtype=np.uint8)
+        self.draw_sliding_tiles(img, self.big_tiles, board, 0)
+
+        return RubiksCross.cross_rot90_right(img, factor)
+
+    def cross_rot90_left(self, board, factor: float = 1.0):
+        return self.cross_rot90_right(board, -factor)
 
     def compute(self, action: Action, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0) -> tuple[npt.NDArray, npt.NDArray]:
         move_funcs = {
