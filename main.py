@@ -1,5 +1,5 @@
 from rubikscross.game_app import GameApp_PyGame
-from rubikscross.graphic_painters import RollFuncMap
+from rubikscross.graphic_painters import RollFuncMap, Roll3DFuncMap
 from rubikscross.graphics import Graphics
 from rubikscross.mixer import PyGameMixer
 from rubikscross.rubikscross import RubiksCross
@@ -22,7 +22,8 @@ def main():
         RubiksCross(
             Graphics(
                 TILES,
-                RollFuncMap(TILES[0].shape[0], GameApp_PyGame.SIZE),
+                # RollFuncMap(tile_size=TILES[0].shape[0], dst_size=GameApp_PyGame.SIZE),
+                Roll3DFuncMap(tile_size=TILES[0].shape[0], dst_size=GameApp_PyGame.SIZE),
                 # FadeFuncMap(tile_size, GameApp_PyGame.SIZE),
                 # CoolFuncMap(tile_size, GameApp_PyGame.SIZE, args.difficulty),
                 animation_max_length=100),

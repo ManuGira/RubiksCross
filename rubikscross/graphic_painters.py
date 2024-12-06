@@ -34,7 +34,7 @@ def insert_tile(image, tile, coord_ij):
 
 def generate_frame(board: npt.NDArray, tiles: list[npt.NDArray]) -> npt.NDArray:
     """
-    This will create an image made of tiles, placed according to the board.
+    Creates an image made of tiles, placed according to the board.
 
     Each value in the board is used as an index. This index is used to select a tile in the tile list
 
@@ -57,6 +57,101 @@ def generate_frame(board: npt.NDArray, tiles: list[npt.NDArray]) -> npt.NDArray:
             ind = int(board[i, j])
             insert_tile(res, tiles[ind], (i, j))
     return res
+
+
+class Roll3DFuncMap(GraphicPainterInterface):
+    def __init__(self, tile_size, dst_size):
+        self.tile_size = tile_size
+        self.dst_size = dst_size
+
+    @staticmethod
+    def insert_subimg(image, subimg, coord_ij):
+        h, w = subimg.shape[:2]
+        H, W = image.shape[:2]
+        i, j = coord_ij
+
+        # img coordinates
+        i0 = max(0, i)
+        j0 = max(0, j)
+        i1 = min(H, i + h)
+        j1 = min(W, j + w)
+
+        # subimg coordinates
+        y0 = max(0, -i)  # crop top of subimg if (i < 0),
+        x0 = max(0, -j)  # crop left of subimg if (j < 0),
+        y1 = y0 + i1 - i0
+        x1 = x0 + j1 - j0
+
+        image[i0:i1, j0:j1] = subimg[y0:y1, x0:x1]
+
+    def cross_rot90_right(self, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0):
+        return self.cross_roll_right(board, tiles, factor)
+
+    def cross_rot90_left(self, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0):
+        return self.cross_roll_right(board, tiles, factor)
+
+    def cross_roll_right(self, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0):
+        h, w = board.shape[:2]
+        assert h % 3 == 0
+        assert h == w
+        n = h // 3
+        board = board.copy()
+
+        # delete right most tiles
+        board[:n, 2 * n - 1] = 0
+        board[n:2 * n, -1] = 0
+        board[2 * n:, 2 * n - 1] = 0
+
+        # todo: precompute
+        big_tiles_size = self.dst_size // w
+        big_tiles = [cv2.resize(tile, dsize=(big_tiles_size, big_tiles_size), interpolation=cv2.INTER_NEAREST) for tile in tiles]
+        img = np.zeros((self.dst_size, self.dst_size, 3), dtype=np.uint8)
+
+        shift = big_tiles_size * factor
+        print(factor)
+        for i in range(h):
+            for j in range(w):
+                tile = big_tiles[board[i, j]]
+                i_dst = int(round((self.dst_size * i) / h))
+                j_dst = int(round((self.dst_size * j) / w + shift))
+                self.insert_subimg(img, tile, (i_dst, j_dst))
+        return img
+
+    def cross_roll_left(self, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0):
+        board = cv2.rotate(board, cv2.ROTATE_180)
+        board = self.cross_roll_right(board, tiles, factor)
+        return cv2.rotate(board, cv2.ROTATE_180)
+
+    def cross_roll_up(self, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0):
+        board = cv2.rotate(board, cv2.ROTATE_90_CLOCKWISE)
+        board = self.cross_roll_right(board, tiles, factor)
+        return cv2.rotate(board, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+    def cross_roll_down(self, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0):
+        board = cv2.rotate(board, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        board = self.cross_roll_right(board, tiles, factor)
+        return cv2.rotate(board, cv2.ROTATE_90_CLOCKWISE)
+
+    def compute(self, action: Action, board: npt.NDArray, tiles: list[npt.NDArray], factor: float = 1.0) -> tuple[npt.NDArray, npt.NDArray]:
+        move_funcs = {
+            Action.UP: self.cross_roll_up,
+            Action.DOWN: self.cross_roll_down,
+            Action.LEFT: self.cross_roll_left,
+            Action.RIGHT: self.cross_roll_right,
+            Action.ROT_LEFT: self.cross_rot90_left,
+            Action.ROT_RIGHT: self.cross_rot90_right,
+        }
+
+        img_u8 = move_funcs[action](board, tiles, factor)
+
+        # cv2.imshow("img_u8", img_u8)
+        # cv2.waitKeyEx(0)
+
+        # alpha = make_square_mask(img_u8.shape[0], self.dst_size).copy()
+        # img_u8 = cv2.resize(img_u8, dsize=(self.dst_size, self.dst_size), interpolation=cv2.INTER_NEAREST)
+
+        alpha = (cv2.cvtColor(img_u8, cv2.COLOR_RGB2GRAY) != 0).astype(np.uint8)*255
+        return img_u8, alpha
 
 
 class RollFuncMap(GraphicPainterInterface):
