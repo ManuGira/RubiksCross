@@ -23,7 +23,7 @@ def main():
             Graphics(
                 TILES,
                 # RollFuncMap(tile_size=TILES[0].shape[0], dst_size=GameApp_PyGame.SIZE),
-                Roll3DFuncMap(tile_size=TILES[0].shape[0], dst_size=GameApp_PyGame.SIZE),
+                Roll3DFuncMap(tiles=TILES, dst_size=GameApp_PyGame.SIZE, difficulty=args.difficulty),
                 # FadeFuncMap(tile_size, GameApp_PyGame.SIZE),
                 # CoolFuncMap(tile_size, GameApp_PyGame.SIZE, args.difficulty),
                 animation_max_length=100),
