@@ -15,20 +15,25 @@ class Graphics:
         self.animation_max_length: int = animation_max_length
 
         self.tile_size: int = self.tiles[0].shape[0]
-        self.frame_config_list: list[tuple[Callable, npt.NDArray]] = []
+        self.frame_config_list: list[tuple[Action, npt.NDArray]] = []
         self.frame_continuous_index: int = 0
         self.frame: npt.NDArray
         self.alpha: npt.NDArray
         self.hint_frame: npt.NDArray
 
     def initialize_frame(self, board):
-        self.frame, self.alpha = self.move_func_map.compute(Action.RIGHT, board, self.tiles, factor=0)
+        self.frame, self.alpha = self.move_func_map.compute(Action.IDLE, board, self.tiles)
 
     def initialize_hint_frame(self, initial_board):
-        self.hint_frame, self.alpha = self.move_func_map.compute(Action.RIGHT, initial_board, self.tiles, factor=0)
+        self.hint_frame, self.alpha = self.move_func_map.compute(Action.IDLE, initial_board, self.tiles)
 
     def update_animation(self, action: Action, board: npt.NDArray, frame_count: int | None = None):
         self.frame_config_list.append((action, board.copy()))
+
+    def reset_frame_config(self, board):
+        self.frame_config_list = [(Action.IDLE, board)]
+        self.frame_continuous_index = 0
+        # self.rcgraphics.get_next_frame()
 
     def get_next_frame(self, height: int | None = None) -> tuple[npt.NDArray, npt.NDArray]:
         fci_max = len(self.frame_config_list)
